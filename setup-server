@@ -1,0 +1,136 @@
+#!/usr/bin/env bash
+
+# Sets up a basic secure web server
+## Includes: firewall, secure SSH settings, sudo user, updates, cronjobs
+
+
+# Args
+
+while [[ $# -gt 0 ]]; do
+	case "$1" in
+		-h|--host) host="$2"; shift; shift;;
+		-u) user="$2"; shift; shift;;
+		-i) ssh_key="$2"; shift; shift;;
+		-k|--authorized_keys) authorized_keys="$2"; shift; shift;;
+		-p|--port) port="$2"; shift; shift;;
+		-n|--new_user) new_user="$2"; shift; shift;;
+		-*|*) echo "Unknown option: $1" >&2; exit 1;;
+	esac
+done
+
+if [[ "" = "$host" ]]; then
+	>&2 echo "Error: Argument for host required."
+	exit 1
+fi
+
+[[ "" != "$port" ]] || port=22
+[[ "" != "$user" ]] || user=root
+
+if [[ "" != "$authorized_keys" ]]; then
+	if ! grep -q "^ssh-rsa " <<< "$authorized_keys"; then
+		>&2 echo "Error: value for authorized keys argument is invalid."
+		>&2 echo "Received value of:"
+		>&2 echo '```'
+		>&2 echo "$authorized_keys"
+		>&2 echo '```'
+		>&2 echo "Please check how keys are being passed and try again."
+		exit 1
+	fi
+fi
+
+
+# Main
+
+## Construct command to send via SSH, to be run immediately on a bash-compatible shell
+## WARNING: To avoid possible errors, script contents substituted into the command should not contain single quotes (')!
+
+command="
+echo \"INFO [\$(date)]: Begin SSH command.\"
+
+# Arguments
+user='$user'
+authorized_keys='$authorized_keys'
+new_user='$new_user'
+
+
+# Transfer utility scripts for system administration
+
+## Add script to return current timestamp (utc) in a filename-friendly form
+echo '$(cat ./sbin/tmst)' | sudo tee /usr/local/sbin/tmst >/dev/null
+sudo chmod +x /usr/local/sbin/tmst
+
+## Add script to backup file while including date created
+echo '$(cat ./sbin/bak)' | sudo tee /usr/local/sbin/bak >/dev/null
+sudo chmod +x /usr/local/sbin/bak
+
+## Add script to quickly add sudo users
+echo '$(cat ./sbin/add-sudoer)' | sudo tee /usr/local/sbin/add-sudoer >/dev/null
+sudo chmod +x /usr/local/sbin/add-sudoer
+
+## Add script to reboot system, only after writing log
+echo '$(cat ./sbin/reboot.sh)' | sudo tee /usr/local/sbin/reboot.sh >/dev/null
+sudo chmod +x /usr/local/sbin/reboot.sh
+
+## Add script for cron to execute upon system poweron (includes logging)
+echo '$(cat ./sbin/on-poweron)' | sudo tee /usr/local/sbin/on-poweron >/dev/null
+sudo chmod +x /usr/local/sbin/on-poweron
+
+
+# Add on-poweron script as entry to system crontab
+file=/usr/local/sbin/on-poweron
+if ! grep -q \"\$file\" /etc/crontab; then
+	sudo bak /etc/crontab
+	echo 'INFO: Add on-poweron script to crontab...'
+	echo \"@reboot		root	\$file\" | sudo tee -a /etc/crontab >/dev/null
+fi
+
+## Create directory to log system power cycles
+sudo mkdir -v /var/log/power-state
+
+
+# Create directories to hold scripts and logs for initial setup
+sudo mkdir -v /usr/local/setup /var/log/setup
+
+# Transfer script that will secure server, to execute immediately
+echo '$(cat ./setup/secure-server)' | sudo tee /usr/local/setup/secure-server >/dev/null
+
+# Transfer script of updates for server to self-execute later
+echo '$(cat ./setup/update-server)' | sudo tee /usr/local/setup/update-server >/dev/null
+
+
+# Log information about arguments provided to script
+if [[ '' != \"\$authorized_keys\" ]]; then
+	echo 'INFO: SSH public keys provided to be transferred.' \
+		| sudo tee /var/log/setup/secure-server
+	echo 'INFO: SSH password authentication will be disabled.' \
+		| sudo tee /var/log/setup/secure-server
+else
+	echo 'INFO: No SSH keys provided.' \
+		| sudo tee /var/log/setup/secure-server
+fi
+if [[ '' != \"\$new_user\" ]]; then
+	echo 'INFO: New user \"$new_user\" will be created.' \
+		| sudo tee /var/log/setup/secure-server
+fi
+if [[ 'root' != \"\$user\" || '' != \"\$new_user\" ]]; then
+	echo 'INFO: Root user SSH login will be disabled.' \
+		| sudo tee /var/log/setup/secure-server
+fi
+
+
+sudo bash /usr/local/setup/secure-server \
+	-k \"\$authorized_keys\" \
+	-u \"\$user\" \
+	-n \"\$new_user\" \
+	2>&1 | sudo tee /var/log/setup/secure-server
+
+echo \"INFO [\$(date)]: End SSH command.\"
+"
+
+
+if [[ "" != "$ssh_key" ]]; then
+	ssh -i "$ssh_key" -p "$port" "$user@$host" "$command"
+else
+	ssh -p "$port" "$user@$host" "$command"
+fi
+

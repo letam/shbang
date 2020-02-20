@@ -1,0 +1,152 @@
+#!/usr/bin/env bash
+
+# Setup and secure server
+# - sets up log directories for system setup and stats
+# - enables firewall allowing only SSH connections
+# - sets update script to be executed as a cronjob at the next minute
+# - writes SSH authorized keys if provided, and then disables SSH password auth
+# - creates sudo user with authorized keys, if spcified
+# - disables SSH login as root user if another user is present
+
+
+if [[ $(id -u) != 0 ]]; then echo "Error: Must be run as sudo/root." ; exit 1; fi
+
+
+# Auxiliary functions
+
+backup_file() {
+	cp -p "$1" "$1.bak.$(date -u +%Y-%m-%d-%H%M%S)"
+}
+
+
+# Args
+
+while [[ $# -gt 0 ]]; do
+	case "$1" in
+		-k|--authorized_keys) authorized_keys="$2"; shift; shift;;
+		-u|--user) user="$2"; shift; shift;;
+		-n|--new_user) new_user="$2"; shift; shift;;
+		-*|*) echo "Unknown option: $1" >&2; exit 1;;
+	esac
+done
+
+
+# Main
+
+
+# Create directory to log setup information
+mkdir -v /var/log/setup 2>/dev/null
+
+
+# Log time of script start
+echo "INFO: __BEGIN__: $(tmst)"
+touch /var/log/setup/secure-server.0
+
+
+# Create directories to capture system stats
+mkdir -v /var/log/stats /var/log/stats/uname /var/log/stats/df /var/log/stats/df-h
+mkdir -v /var/log/stats/motd
+
+
+# Capture initial stats
+uname -a > /var/log/stats/uname/0
+df > /var/log/stats/df/0
+df -h > /var/log/stats/df-h/0
+cat /run/motd.dynamic > /var/log/stats/motd/0
+
+
+# Transfer SSH keys
+if [[ "" != "$authorized_keys" ]]; then
+
+	echo "INFO: Writing SSH public keys..."
+	mkdir -v ~/.ssh
+	chmod 700 ~/.ssh
+	if [[ -f ~/.ssh/authorized_keys ]]; then
+		 backup_file ~/.ssh/authorized_keys
+	fi
+	echo "$authorized_keys" > ~/.ssh/authorized_keys
+	if grep -q " ssh-rsa " ~/.ssh/authorized_keys; then
+		# Ensure that individual keys are separated by a line break, in case the line breaks were lost during input processing
+		sed -i "s/ ssh-rsa /\nssh-rsa /g" ~/.ssh/authorized_keys
+	fi
+
+	echo "INFO: Disabling SSH password authentication..."
+	if grep -q -E "^PasswordAuthentication yes" /etc/ssh/sshd_config; then
+		file=/etc/ssh/sshd_config
+		backup_file $file
+		sudo sed -i -E "s/(^PasswordAuthentication) yes/\1 no/" $file
+		sudo service sshd reload
+	elif grep -q -E "#?PasswordAuthentication yes" /etc/ssh/sshd_config; then
+		file=/etc/ssh/sshd_config
+		backup_file $file
+		sudo sed -i -E "s/#?(PasswordAuthentication) yes/\1 no/" $file
+		sudo service sshd reload
+	fi
+	if ! grep -q -E "^PasswordAuthentication no" /etc/ssh/sshd_config; then
+		file=/etc/ssh/sshd_config
+		backup_file $file
+		echo "PasswordAuthentication no" >> /etc/ssh/sshd_config
+		sudo service sshd reload
+	fi
+
+else
+	echo "INFO: No SSH authorized_keys provided."
+fi
+
+
+# Add sudo user, with provided SSH keys
+if [[ "" != "$new_user" ]]; then
+	echo "INFO: Adding user."
+	sudo add-sudoer -u "$new_user" -k "$authorized_keys" 2>&1 | sudo tee -a /var/log/setup/add-sudoer.log
+else
+	echo "INFO: No user added."
+fi
+
+
+# Disallow root login via SSH if another user is present
+if [[ "root" != "$user" || "" != "$new_user" ]]; then
+	echo "INFO: Ensuring that SSH login as root is disabled..."
+	if grep -q -E "^PermitRootLogin yes" /etc/ssh/sshd_config; then
+		echo "INFO: Updating /etc/ssh/sshd_config: -> PermitRootLogin no"
+		file=/etc/ssh/sshd_config
+		sudo bak /etc/ssh/sshd_config
+		#sudo sed --in-place -E "s/(^PermitRootLogin) yes/\1 prohibit-password/" $file
+		sudo sed --in-place -E "s/(^PermitRootLogin) yes/\1 no/" $file
+		sudo service sshd reload
+	fi
+	if ! grep -q -E "^PermitRootLogin no" /etc/ssh/sshd_config; then
+		echo "INFO: Updating /etc/ssh/sshd_config: -> PermitRootLogin no"
+		file=/etc/ssh/sshd_config
+		sudo bak /etc/ssh/sshd_config
+		echo "PermitRootLogin no" >> /etc/ssh/sshd_config
+		sudo service sshd reload
+	fi
+fi
+
+
+# Enable Firewall
+echo "INFO: Enable firewall and open SSH port."
+sudo ufw allow "OpenSSH"
+echo y | sudo ufw enable
+
+
+# Ensure cron service is enabled and started
+if ! systemctl -q is-active cron.service; then
+	sudo systemctl enable cron.service
+	sudo service cron start
+fi
+
+
+# Add cronjob so that server will execute next setup script on its own
+backup_file /etc/crontab
+echo "INFO: Set cronjob so that the next setup script will run at the next minute."
+echo "* *	* * *	root	bash /usr/local/setup/update-server \
+	>> /var/log/setup/update-server 2>&1 \
+	# initial setup script ; remove_immediately" \
+	| sudo tee -a /etc/crontab >/dev/null
+
+
+# Log time of script end
+touch /var/log/setup/secure-server.1
+echo "INFO: __END__: $(tmst)"
+

@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+
+# Create backup of file
+
+file=$1
+if [[ "" = "$file" ]]; then echo "Error: Argument for file required."; exit 1; fi
+cp -vp $file $file.bak.$(date -u +%Y-%m-%d-%H%M%S)
+

@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+
+# Operations to perform when system powers on
+
+
+if [[ $(id -u) != 0 ]]; then echo "Error: Must be run as sudo/root." ; exit 1; fi
+
+
+# Log system powerons
+touch /var/log/power-state/"$(date -u +%Y-%m-%d-%H%M%S)".poweron
+
+
+# Log `uname -a` every time it changes
+dir=/var/log/stats/uname
+last_uname_log=$(ls -pt "$dir" | grep -v / | head -1)
+if [[ "$(uname -a)" != "$(cat "$dir/$last_uname_log")" ]]; then
+        uname -a > "$dir/$((last_uname_log+1))"
+fi

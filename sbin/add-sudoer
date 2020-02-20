@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+
+# Create a user that has sudo access without a password
+
+
+if [[ $(id -u) != 0 ]]; then echo "Error: Must be run as sudo/root." ; exit 1; fi
+
+
+# Args
+
+while [[ $# -gt 0 ]]; do
+	case "$1" in
+		-u) user="$2"
+			shift; shift;;
+		-k|--authorized_keys) authorized_keys="$2"
+			shift; shift;;
+		-*|*) echo "unknown option: $1" >&2
+			exit 1;;
+	esac
+done
+
+if [[ "" = "$user" ]]; then
+	echo "FATAL ERROR: Username argument required."
+	exit 1
+fi
+if id -u "$user" &>/dev/null; then
+	echo "FATAL ERROR: User with name already exists."
+	exit 1
+fi
+
+
+# Main
+
+# Create $user
+sudo adduser --disabled-password --shell /bin/bash --gecos "$user User" $user
+echo
+
+# Allow $user to sudo without password
+echo "Allowing user to run any command as sudo without password..."
+echo -e "# Allow user to sudo without password\n$user ALL=(ALL:ALL) NOPASSWD: ALL" | tee /etc/sudoers.d/$user
+echo "-> /etc/sudoers.d/$user"
+
+if [[ "" != "$authorized_keys" ]]; then
+	# Set SSH authorized_keys for user
+	mkdir /home/$user/.ssh
+	chmod 700 /home/$user/.ssh
+	echo "$authorized_keys" > /home/$user/.ssh/authorized_keys
+	chmod 600 /home/$user/.ssh/authorized_keys
+	if grep -q " ssh-rsa " /home/$user/.ssh/authorized_keys; then
+		# Ensure that individual keys are separated by a line break, in case the line breaks were lost during input processing
+		echo "Adding line breaks in between keys..."
+		sed --in-place "s/ ssh-rsa /\nssh-rsa /g" ~/.ssh/authorized_keys
+	fi
+fi
+
+# Set user as owner of files in their home directory
+chown -R $user:$user /home/$user
+

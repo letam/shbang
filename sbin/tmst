@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+
+# Return a human and filename-friendly timestamp (UTC timezone)
+date -u +%Y-%m-%d-%H%M%S

@@ -1,0 +1,79 @@
+#!/usr/bin/env bash
+
+# Script to install latest system updates.
+
+if [[ $(id -u) != 0 ]]; then echo "Error: Must be run as sudo/root." ; exit 1; fi
+
+
+# Auxiliary functions
+
+backup_file() {
+	cp -p "$1" "$1.bak.$(date -u +%Y-%m-%d-%H%M%S)"
+}
+
+
+# Main
+
+
+# Log time of script start
+touch /var/log/setup/update-server.0
+echo "INFO: __BEGIN__: $(tmst)"
+
+
+# Remove cronjob specifying this setup script
+file="/usr/local/setup/update-server"
+if grep -q "$file" /etc/crontab; then
+	backup_file /etc/crontab
+	sudo sed -i "\|$file|d" /etc/crontab
+fi
+
+
+# Update and upgrade all system packages
+
+## Log stats before system updates
+df > /var/log/stats/df/1.0
+df -h > /var/log/stats/df-h/1.0
+
+## Create directory for logs of package updates and upgrades
+sudo mkdir -v /var/log/apt-update /var/log/apt-upgrade
+
+## Update system package information
+touch /var/log/setup/update-server.update.0
+echo "INFO: __apt update BEGIN__: $(tmst)"
+sudo apt update \
+	| sudo tee /var/log/apt-update/"$(tmst)" && \
+	echo "INFO: __apt update END__: $(tmst)"
+touch /var/log/setup/update-server.update.1
+
+## Log stats after update
+df > /var/log/stats/df/1.0.1
+df -h > /var/log/stats/df-h/1.0.1
+
+## Upgrade system packages while ignoring all prompts
+touch /var/log/setup/update-server.upgrade.0
+echo "INFO: __apt upgrade BEGIN__: $(tmst)"
+sudo DEBIAN_FRONTEND=noninteractive apt upgrade -yq \
+	| sudo tee /var/log/apt-upgrade/"$(tmst)" && \
+	echo "INFO: __apt upgrade END__: $(tmst)"
+touch /var/log/setup/update-server.upgrade.1
+
+
+## Log system stats after upgrade
+cat /run/motd.dynamic > /var/log/stats/motd/1.1
+df > /var/log/stats/df/1.1
+df -h > /var/log/stats/df-h/1.1
+
+
+# Make note of time of script end
+touch /var/log/setup/update-server.1
+echo "INFO: __END__: $(tmst)"
+
+
+# Reboot to apply upgrades
+if [[ -f /var/run/reboot-required ]]; then
+	echo "INFO: Upgrades require reboot. Rebooting now..."
+	sudo reboot.sh
+else
+	echo "INFO: All done. No reboot required."
+fi
+
