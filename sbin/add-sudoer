@@ -32,8 +32,11 @@ fi
 # Main
 
 # Create $user
-sudo adduser --disabled-password --shell /bin/bash --gecos "$user User" $user
-echo
+if [[ $(uname -a) =~ "Ubuntu" ]]; then
+	sudo adduser --disabled-password --shell /bin/bash --gecos "$user User" $user
+else
+	sudo adduser $user
+fi
 
 # Allow $user to sudo without password
 echo "Allowing user to run any command as sudo without password..."

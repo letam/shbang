@@ -1,12 +1,12 @@
 # Shbang - Server Orchestration
 Lays the foundational feces of your cybernetic garden. Does the dirty work so that you don't have to.
-Sets up a secure Ubuntu Linux Server.
+Sets up a secure CentOS or Ubuntu Linux Server.
 
 
 ## Requirements
 
 	- Bash-compatible shell (including Z shell)
-	- Access to an Ubuntu Linux server
+	- Access to either CentOS 8 or Ubuntu 18.04 LTS Linux server
 
 ## Instructions
 

@@ -17,6 +17,12 @@ if [[ $(id -u) != 0 ]]; then echo "Error: Must be run as sudo/root." ; exit 1; f
 backup_file() {
 	cp -p "$1" "$1.bak.$(date -u +%Y-%m-%d-%H%M%S)"
 }
+is_centos() {
+	[[ $(uname -s) = "Linux" && -f /etc/centos-release ]]
+}
+is_ubuntu() {
+	[[ $(uname -s) = "Linux" && $(uname -a) =~ "Ubuntu" ]]
+}
 
 
 # Args
@@ -45,14 +51,19 @@ touch /var/log/setup/secure-server.0
 
 # Create directories to capture system stats
 mkdir -v /var/log/stats /var/log/stats/uname /var/log/stats/df /var/log/stats/df-h
-mkdir -v /var/log/stats/motd
 
 
 # Capture initial stats
 uname -a > /var/log/stats/uname/0
 df > /var/log/stats/df/0
 df -h > /var/log/stats/df-h/0
-cat /run/motd.dynamic > /var/log/stats/motd/0
+if command -v rpm >/dev/null; then
+	mkdir -v /var/log/stats/kernel
+	rpm -q --last kernel | sudo tee /var/log/stats/kernel/0
+elif [[ -f /run/motd.dynamic ]]; then
+	mkdir -v /var/log/stats/motd
+	cat /run/motd.dynamic > /var/log/stats/motd/0
+fi
 
 
 # Transfer SSH keys
@@ -75,18 +86,18 @@ if [[ "" != "$authorized_keys" ]]; then
 		file=/etc/ssh/sshd_config
 		backup_file $file
 		sudo sed -i -E "s/(^PasswordAuthentication) yes/\1 no/" $file
-		sudo service sshd reload
+		sudo systemctl reload sshd
 	elif grep -q -E "#?PasswordAuthentication yes" /etc/ssh/sshd_config; then
 		file=/etc/ssh/sshd_config
 		backup_file $file
 		sudo sed -i -E "s/#?(PasswordAuthentication) yes/\1 no/" $file
-		sudo service sshd reload
+		sudo systemctl reload sshd
 	fi
 	if ! grep -q -E "^PasswordAuthentication no" /etc/ssh/sshd_config; then
 		file=/etc/ssh/sshd_config
 		backup_file $file
 		echo "PasswordAuthentication no" >> /etc/ssh/sshd_config
-		sudo service sshd reload
+		sudo systemctl reload sshd
 	fi
 
 else
@@ -112,26 +123,50 @@ if [[ "root" != "$user" || "" != "$new_user" ]]; then
 		sudo bak /etc/ssh/sshd_config
 		#sudo sed --in-place -E "s/(^PermitRootLogin) yes/\1 prohibit-password/" $file
 		sudo sed --in-place -E "s/(^PermitRootLogin) yes/\1 no/" $file
-		sudo service sshd reload
+		sudo systemctl reload sshd
 	fi
 	if ! grep -q -E "^PermitRootLogin no" /etc/ssh/sshd_config; then
 		echo "INFO: Updating /etc/ssh/sshd_config: -> PermitRootLogin no"
 		file=/etc/ssh/sshd_config
 		sudo bak /etc/ssh/sshd_config
 		echo "PermitRootLogin no" >> /etc/ssh/sshd_config
-		sudo service sshd reload
+		sudo systemctl reload sshd
 	fi
 fi
 
 
 # Enable Firewall
-echo "INFO: Enable firewall and open SSH port."
-sudo ufw allow "OpenSSH"
-echo y | sudo ufw enable
+if is_centos; then
+	if ! command -v firewalld >/dev/null; then
+		echo "INFO: Installing firewalld service."
+		sudo dnf install -y firewalld && echo >/dev/null
+	fi
+	if ! sudo systemctl list-unit-files | grep enabled | grep -q firewalld; then
+		echo "INFO: Enabling firewalld service."
+		sudo systemctl enable firewalld
+	fi
+	#if ! systemctl -q is-active firewalld; then
+	if ! sudo systemctl | grep running | grep -q firewalld; then
+		echo "INFO: Starting firewalld service."
+		sudo systemctl start firewalld
+	fi
+	if ! sudo firewall-cmd --list-services | grep -q "ssh"; then
+		echo "INFO: Open SSH port in firewalld."
+		sudo firewall-cmd --permanent --add-service=ssh
+		sudo firewall-cmd --reload
+	fi
+elif is_ubuntu; then
+	echo "INFO: Enable firewall and open SSH port."
+	sudo ufw allow "OpenSSH"
+	echo y | sudo ufw enable
+fi
 
 
 # Ensure cron service is enabled and started
-if ! systemctl -q is-active cron.service; then
+if is_centos && ! systemctl -q is-active crond; then
+	sudo systemctl enable crond
+	sudo systemctl start crond
+elif is_ubuntu && ! systemctl -q is-active cron.service; then
 	sudo systemctl enable cron.service
 	sudo service cron start
 fi

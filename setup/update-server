@@ -10,6 +10,12 @@ if [[ $(id -u) != 0 ]]; then echo "Error: Must be run as sudo/root." ; exit 1; f
 backup_file() {
 	cp -p "$1" "$1.bak.$(date -u +%Y-%m-%d-%H%M%S)"
 }
+is_centos() {
+	[[ $(uname -s) = "Linux" && -f /etc/centos-release ]]
+}
+is_ubuntu() {
+	[[ $(uname -s) = "Linux" && $(uname -a) =~ "Ubuntu" ]]
+}
 
 
 # Main
@@ -34,32 +40,74 @@ fi
 df > /var/log/stats/df/1.0
 df -h > /var/log/stats/df-h/1.0
 
-## Create directory for logs of package updates and upgrades
-sudo mkdir -v /var/log/apt-update /var/log/apt-upgrade
+## Fetch latest system update information
+if is_centos; then
 
-## Update system package information
-touch /var/log/setup/update-server.update.0
-echo "INFO: __apt update BEGIN__: $(tmst)"
-sudo apt update \
-	| sudo tee /var/log/apt-update/"$(tmst)" && \
-	echo "INFO: __apt update END__: $(tmst)"
-touch /var/log/setup/update-server.update.1
+	## Log system kernel before update
+	rpm -q --last kernel | sudo tee /var/log/stats/kernel/1.0
 
-## Log stats after update
-df > /var/log/stats/df/1.0.1
-df -h > /var/log/stats/df-h/1.0.1
+	## Create log directory for package updates and upgrades
+	sudo mkdir -v /var/log/dnf-check-update /var/log/dnf-upgrade
 
-## Upgrade system packages while ignoring all prompts
-touch /var/log/setup/update-server.upgrade.0
-echo "INFO: __apt upgrade BEGIN__: $(tmst)"
-sudo DEBIAN_FRONTEND=noninteractive apt upgrade -yq \
-	| sudo tee /var/log/apt-upgrade/"$(tmst)" && \
-	echo "INFO: __apt upgrade END__: $(tmst)"
-touch /var/log/setup/update-server.upgrade.1
+	## Update system package information
+	touch /var/log/setup/update-server.check-update.0
+	echo "INFO: __dnf check-update BEGIN__: $(tmst)"
+	sudo dnf check-update \
+		| sudo tee /var/log/dnf-check-update/"$(tmst)" && \
+		echo "INFO: __dnf check-update END__: $(tmst)"
+	touch /var/log/setup/update-server.check-update.1
 
+elif is_ubuntu; then
+
+	## Log system motd before update
+	cat /run/motd.dynamic > /var/log/stats/motd/1.0
+
+	## Create log directory for package updates and upgrades
+	sudo mkdir -v /var/log/apt-update /var/log/apt-upgrade
+
+	## Update system package information
+	touch /var/log/setup/update-server.update.0
+	echo "INFO: __apt update BEGIN__: $(tmst)"
+	sudo apt update \
+		| sudo tee /var/log/apt-update/"$(tmst)" && \
+		echo "INFO: __apt update END__: $(tmst)"
+	touch /var/log/setup/update-server.update.1
+
+fi
+
+## Log stats after checking for system updates
+df > /var/log/stats/df/1.after-first-check-update
+df -h > /var/log/stats/df-h/1.after-first-check-update
+
+## Install system updates
+if is_centos; then
+
+	touch /var/log/setup/update-server.upgrade.0
+	echo "INFO: __dnf upgrade BEGIN__: $(tmst)"
+	sudo dnf upgrade -y \
+		| sudo tee /var/log/dnf-upgrade/"$(tmst)" && \
+		echo "INFO: __dnf upgrade END__: $(tmst)"
+	touch /var/log/setup/update-server.upgrade.1
+
+	## Log system kernel after update
+	rpm -q --last kernel | sudo tee /var/log/stats/kernel/1.1
+
+elif is_ubuntu; then
+
+	## Upgrade system packages while ignoring all prompts
+	touch /var/log/setup/update-server.upgrade.0
+	echo "INFO: __apt upgrade BEGIN__: $(tmst)"
+	sudo DEBIAN_FRONTEND=noninteractive apt upgrade -yq \
+		| sudo tee /var/log/apt-upgrade/"$(tmst)" && \
+		echo "INFO: __apt upgrade END__: $(tmst)"
+	touch /var/log/setup/update-server.upgrade.1
+
+	## Log system motd after upgrade
+	cat /run/motd.dynamic | sudo tee /var/log/stats/motd/1.1
+
+fi
 
 ## Log system stats after upgrade
-cat /run/motd.dynamic > /var/log/stats/motd/1.1
 df > /var/log/stats/df/1.1
 df -h > /var/log/stats/df-h/1.1
 
@@ -70,7 +118,10 @@ echo "INFO: __END__: $(tmst)"
 
 
 # Reboot to apply upgrades
-if [[ -f /var/run/reboot-required ]]; then
+if is_centos && [[ $(uname -r) != $(rpm -q --last kernel | head -1 | sed -E "s|kernel-([0-9.a-z_-]+).*$|\1|") ]]; then
+	echo "Kernel upgrade requires reboot. Rebooting now..."
+	sudo reboot.sh
+elif is_ubuntu && [[ -f /var/run/reboot-required ]]; then
 	echo "INFO: Upgrades require reboot. Rebooting now..."
 	sudo reboot.sh
 else
