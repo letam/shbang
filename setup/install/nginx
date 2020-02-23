@@ -1,0 +1,195 @@
+#!/usr/bin/env bash
+
+# Ensure Nginx is installed and serving a website
+
+
+[[ $(id -u) != 0 ]] && echo "Error: Must be run as sudo/root." && exit 1
+
+
+is_centos() {
+	[[ -f /etc/centos-release ]]
+}
+is_ubuntu() {
+	[[ $(uname -a) =~ Ubuntu ]]
+}
+
+
+# Install Nginx web server (and proxy server) application
+if ! command -v nginx >/dev/null; then
+	if is_centos; then
+		sudo dnf install -y nginx
+	elif is_ubuntu; then
+		sudo apt install -y nginx
+	fi
+fi
+if ! systemctl list-unit-files | grep enabled | grep -q nginx; then
+	echo "Enabling nginx service."
+	sudo systemctl enable nginx
+fi
+#if ! systemctl -q is-active nginx; then
+if ! systemctl | grep running | grep -q nginx; then
+	echo "Starting nginx service."
+	sudo systemctl start nginx
+fi
+
+
+# Set firewall rules for ports for HTTP and HTTPS
+if is_centos; then
+	#sudo firewall-cmd --zone=public --add-service=http --permanent
+	#sudo firewall-cmd --zone=public --add-service=https --permanent
+	sudo firewall-cmd --set-default-zone=dmz
+	sudo firewall-cmd --zone=dmz --add-interface=eth0
+	sudo firewall-cmd --zone=dmz --add-service=http --permanent
+	sudo firewall-cmd --zone=dmz --add-service=https --permanent
+	sudo firewall-cmd --reload
+elif is_ubuntu; then
+	sudo ufw allow http
+	sudo ufw allow https
+fi
+
+
+# Nginx Configuration
+
+sudo bak /etc/nginx/nginx.conf
+
+
+## Configure static file compression
+
+### Create module for gzip compression settings
+sudo tee /etc/nginx/conf.d/gzip.conf >/dev/null <<-EOF
+
+	gzip		on;
+	gzip_types	text/plain text/css application/javascript application/json text/xml application/xml+rss;
+	gzip_min_length	1400;
+	gzip_static	on;
+	EOF
+
+### Disable gzip settings in main config file
+if grep -q "^\sgzip[ _]" /etc/nginx/nginx.conf; then
+	sed -i -E "s/^([ \t\]+gzip.*;)/#\1/" /etc/nginx/nginx.conf
+fi
+
+
+## Set Nginx config to process configs in the same way across different platforms
+
+test -d /etc/nginx/sites-available || sudo mkdir -v /etc/nginx/sites-available
+test -d /etc/nginx/sites-enabled || sudo mkdir -v /etc/nginx/sites-enabled
+
+### Add setting in nginx.conf to execute files in sites-enabled directory
+if ! grep -q "^\s*include\s/etc/nginx/sites-enabled/\*;" /etc/nginx/nginx.conf; then
+	sed -i -E "s|([^i]+)(include .*/conf\.d/\*\.conf;)|\1\2\n\1include /etc/nginx/sites-enabled/*;|" /etc/nginx/nginx.conf
+fi
+
+### Extract and copy default server config blocks into its own file
+
+src_file=/etc/nginx/nginx.conf
+dst_file=/etc/nginx/sites-available/default
+
+if grep -q -E "^[ \t]*server {" $src_file \
+	&& grep -q -E "^[ \t]+listen .*default_server;" $src_file
+then
+
+	block_end_symbol="}"
+
+	# Get each starting block (one for http, the other for https)
+
+	## Set word boundaries as we process file contents
+	IFS_0="$IFS"
+	IFS=""
+
+	block_start_line_nums=$(grep -n -E "^[ \t\#]*server {" $src_file | cut -f1 -d:)
+	while read block_start_line_num; do
+		### Ignore content in file before the first line of the block
+		content_crop_at_line_num=$(tail -n +$block_start_line_num $src_file)
+
+		### Get opening line indent in order to find end of block and num of lines
+		line_indent=$(echo $content_crop_at_line_num | head -1 | sed -E "s|^([ \t\#]*).*$|\1|")
+		block_num_of_lines=$(echo $content_crop_at_line_num \
+			| grep -n -E "^$line_indent$block_end_symbol" \
+			| cut -f1 -d:)
+
+		### Get content block to write to new file
+		content_block=$(echo $content_crop_at_line_num | head -n $block_num_of_lines)
+		echo -e "\n\n$content_block" | sudo tee -a $dst_file >/dev/null
+	done <<< $(echo $block_start_line_nums)
+
+	## Reset word boundaries
+	IFS="$IFS_0"
+
+
+	# Format/clean new file
+
+	## De-indent the lines
+	indent_string=$(cat $dst_file \
+		| grep -E "^[ \t]+" | head -1 | sed -E "s|(^[ \t]+).*$|\1|")
+	sudo sed -i -E "s|^(#?)$indent_string(.*)|\1\2|" $dst_file
+
+	## Trim leading blank lines of file
+	lines_to_trim=0
+	while read line; do
+		if [[ $line != "" ]]; then
+			break
+		fi
+		((++lines_to_trim))
+	done <<< $(cat $dst_file)
+	sudo sed -i "1,${lines_to_trim}d" $dst_file
+
+
+	# Disable each active server block in /etc/nginx/nginx.conf
+
+	## Set word boundaries as we process file contents
+	IFS_0="$IFS"
+	IFS=""
+
+	active_block_start_line_nums=$(grep -n -E "^[ \t]*server {" $src_file | cut -f1 -d:)
+	while read line_num; do
+		### Ignore content in file before the first line of the block
+		content_crop_at_line_num=$(tail -n +$line_num $src_file)
+
+		### Get opening line indent in order to find ending line number
+		line_indent=$(echo $content_crop_at_line_num | head -1 | sed -E "s|^([ \t\#]*).*$|\1|")
+		block_num_of_lines=$(echo $content_crop_at_line_num \
+			| grep -n -E "^$line_indent$block_end_symbol" \
+			| cut -f1 -d:)
+		line_num_end=$((line_num + block_num_of_lines - 1))
+
+		### Comment lines to disable
+		sudo sed -i -E "$line_num,$line_num_end s/(.*)/#\1/" $src_file
+	done <<< $(echo $active_block_start_line_nums)
+
+	## Reset word boundaries
+	IFS="$IFS_0"
+
+
+	# Enable the newly created conf file containing the blocks of code just extracted
+	sudo ln -s /etc/nginx/sites-available/default /etc/nginx/sites-enabled
+fi
+
+
+## Update sites enabled
+
+### Disable default site
+if [[ -f /etc/nginx/sites-enabled/default ]]; then
+	sudo mkdir -v /etc/nginx/sites-disabled
+	sudo mv -v /etc/nginx/sites-enabled/default /etc/nginx/sites-disabled
+fi
+
+### Create config for localhost and enable it
+if [[ ! -f /etc/nginx/sites-available/localhost \
+	&& -f /etc/nginx/sites-available/default ]]
+then
+	cat /etc/nginx/sites-available/default \
+		| sed -E "s|([ \t]+listen .*) default_server;|\1;|" \
+		| sed -E "s|(server_name[ \t]+)_|\1localhost|" \
+		| sudo tee /etc/nginx/sites-available/localhost >/dev/null
+	sudo ln -s /etc/nginx/sites-available/localhost /etc/nginx/sites-enabled
+fi
+
+
+# Reload nginx service to update configuration settings
+if is_centos; then
+	sudo systemctl reload nginx
+elif is_ubuntu; then
+	sudo service nginx reload
+fi
+
