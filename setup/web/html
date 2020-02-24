@@ -1,0 +1,104 @@
+#!/usr/bin/env bash
+
+# Set up a basic static (HTML-based) website and serve with Nginx
+
+
+[[ $(id -u) != 0 ]] && >&2 echo "Error: Must be run as sudo/root." && exit 1
+
+# Arguments
+
+domain=$1
+if [[ $domain = "" ]]; then
+	>&2 echo "Error: Argument for domain required."
+	exit 1
+fi
+
+
+# Auxiliary functions
+
+is_centos() {
+	[[ -f /etc/centos-release ]]
+}
+is_ubuntu() {
+	[[ $(uname -a) =~ "Ubuntu" ]]
+}
+
+
+# Dependencies
+
+[[ ! -d /var/log/setup/install ]] && mkdir -vp /var/log/setup/install
+
+## Install Nginx if not found
+if ! command -v nginx >/dev/null; then
+	printf "INFO: Installing Nginx..."
+	sudo $(dirname $0)/../install/nginx \
+		2>&1 | tee /var/log/setup/install/nginx >/dev/null
+	echo " DONE! [$(date)]"
+fi
+
+## Install Certbot if not found
+if ! command -v certbot >/dev/null; then
+	printf "INFO: Installing Certbot..."
+	sudo $(dirname $0)/../install/certbot \
+		2>&1 | tee /var/log/setup/install/certbot >/dev/null
+	echo " DONE! [$(date)]"
+fi
+
+
+# Main
+
+## Set variables for paths of interest
+project_dir=/var/www/$domain
+html_dir=/var/www/$domain/html
+nginx_conf=/var/www/$domain/nginx.conf
+
+
+## Create project folder
+sudo mkdir -vp $project_dir
+
+## Create html folder
+sudo cp -pr /usr/share/nginx/html $html_dir
+
+## Create nginx config
+cat /etc/nginx/sites-available/default \
+	| sed -E "
+		s|([ \t]+listen .*) default_server|\1|;
+		s|(server_name[ \t]+)_|\1$domain|;
+		s|([ \t]+root[ \t]+).*;$|\1$html_dir;|;
+	" | sudo tee $nginx_conf >/dev/null
+
+### Include www subdomain in config if domain is root
+server_names=$domain
+is_not_subdomain="test $(echo $domain | tr -dc "." | wc -c) -eq 1"
+if $is_not_subdomain; then
+	server_names+=" www.$domain"
+	sudo sed -i -E "s|(server_name[ \t]+)$domain|\1$server_names|" $nginx_conf
+fi
+
+## Add config to directory of site configs, to enable
+sudo ln -s $nginx_conf /etc/nginx/sites-enabled/$domain
+
+
+## Reload nginx to apply settings thus far
+sudo systemctl reload nginx
+
+
+## SELinux settings
+
+### Add SELinux label to allow Nginx to access nginx conf in project directory
+#* Deals with: SELinux is preventing /usr/sbin/nginx from open access on the file $project_dir/nginx.conf.
+#* $project_dir/nginx.conf default label should be httpd_sys_content_t
+sudo /sbin/restorecon -v $project_dir/nginx.conf
+
+### Add SELinux label to allow Nginx to access all files in project directory
+#* Deals with: SELinux is preventing /usr/sbin/nginx from getattr access on the file $project_dir/html/index.html.
+#* $project_dir/html/index.html default label should be httpd_sys_content_t.
+sudo /sbin/restorecon -v $project_dir/html/* -R
+# TODO: Update (fine-tune) the labeling to apply only to HTML, CSS, JS, media
+
+
+## Generate SSL cert for HTTPS connections
+
+ssl_domains=$(echo $server_names | tr " " ",")
+sudo certbot --nginx -n --agree-tos --register-unsafely-without-email --redirect --domains $ssl_domains --expand
+
