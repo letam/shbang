@@ -33,6 +33,21 @@ if ! systemctl | grep running | grep -q nginx; then
 fi
 
 
+# SELinux (Security) settings for permissions regarding serving HTTP content
+# # @note Got information about settings to change via:
+# # $(grep denied /var/log/audit/audit.log | audit2why)
+#if is_centos; then
+#	# Allow httpd to read user content
+#	#sudo setsebool -P httpd_read_user_content 1
+
+#	# Allow httpd to enable homedirs
+#	#sudo setsebool -P httpd_enable_homedirs 1
+
+#	# Allow httpd to unified
+#	sudo setsebool -P httpd_unified 1
+#fi
+
+
 # Set firewall rules for ports for HTTP and HTTPS
 if is_centos; then
 	#sudo firewall-cmd --zone=public --add-service=http --permanent
