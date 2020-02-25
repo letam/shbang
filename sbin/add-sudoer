@@ -59,3 +59,6 @@ fi
 # Set user as owner of files in their home directory
 chown -R $user:$user /home/$user
 
+# Add user to groups for system monitoring
+sudo cp -p /etc/group /etc/group.bak.$(date -u +%Y-%m-%d-%H%M%S)
+sudo usermod -aG adm $user
