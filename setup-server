@@ -91,6 +91,18 @@ command+="
 sudo mkdir -v /var/log/power-state
 "
 
+### Ensure that logs for systemd-journald (journalctl) persists across system reboots
+### # Reference: `man systemd-journald.service`
+command+="
+if [[ ! -d /var/log/journal ]]; then
+	echo 'INFO: Enabling persistent journal logs.'
+    sudo mkdir -vp /var/log/journal
+    echo 'INFO: Setting correct permissions on /var/log/journal...'
+    sudo systemd-tmpfiles --create --prefix /var/log/journal
+    sudo systemctl restart systemd-journald
+fi
+"
+
 ### Create directories to hold scripts and logs for initial setup
 command+="
 sudo mkdir -vp /usr/local/setup /var/log/setup
