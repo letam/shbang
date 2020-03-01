@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+
+# Return OS name (case-insensitive) of current system
+
+
+is_centos() {
+	[[ $(uname -s) = "Linux" && -f /etc/centos-release ]]
+}
+
+is_ubuntu() {
+	[[ $(uname -s) = "Linux" && $(uname -a) =~ "Ubuntu" ]]
+}
+
+is_mac() {
+	[ $(uname -s) = "Darwin" ]
+}
+
+is_wsl() {
+	[[ $(uname -s) = "Linux" && $(uname -a) =~ "Microsoft" ]]
+}
+
+if is_centos; then
+	echo centos
+elif is_ubuntu; then
+	echo ubuntu
+elif is_mac; then
+	echo mac
+elif is_wsl; then
+	echo wsl
+fi

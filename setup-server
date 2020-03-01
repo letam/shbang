@@ -63,6 +63,7 @@ sbin_script_files=(
 	add-sudoer	# Quickly add password-less sudo users
 	reboot.sh	# Reboot system after writing log
 	on-poweron	# Cronjob script to execute upon system poweron (includes logging)
+	os-name		# Return OS name of current system
 )
 for file in "${sbin_script_files[@]}"; do
 	script=$(<"./sbin/$file")
