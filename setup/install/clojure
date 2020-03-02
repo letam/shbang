@@ -36,3 +36,20 @@ if ! command -v rlwrap >/dev/null; then
 		sudo dnf install -y rlwrap
 	fi
 fi
+
+
+## Install Leiningen project/package manager
+bin_dir=/home/$SUDO_USER/bin
+if [[ ! -d $bin_dir ]]; then
+	mkdir -v "$bin_dir"
+	sudo chown -v "$SUDO_USER:$SUDO_USER" "$bin_dir"
+fi
+
+if [[ ! -x $bin_dir/lein ]]; then
+	curl -O https://raw.githubusercontent.com/technomancy/leiningen/stable/bin/lein
+	sudo chmod -v a+x lein
+	sudo chown -v "$SUDO_USER:$SUDO_USER" lein
+	sudo mv lein "$bin_dir"
+	"$bin_dir"/lein
+fi
+
