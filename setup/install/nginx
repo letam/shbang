@@ -36,7 +36,15 @@ fi
 # SELinux (Security) settings for permissions regarding serving HTTP content
 # # @note Got information about settings to change via:
 # # $(grep denied /var/log/audit/audit.log | audit2why)
-#if is_centos; then
+if is_centos; then
+
+	# Allow httpd to can network connect
+	# (Allow HTTPD scripts and modules to connect to the network)
+	sudo setsebool -P httpd_can_network_connect 1
+
+	# Allow nis to enabled
+	sudo setsebool -P nis_enabled 1
+
 #	# Allow httpd to read user content
 #	#sudo setsebool -P httpd_read_user_content 1
 
@@ -45,7 +53,8 @@ fi
 
 #	# Allow httpd to unified
 #	sudo setsebool -P httpd_unified 1
-#fi
+
+fi
 
 
 # Set firewall rules for ports for HTTP and HTTPS

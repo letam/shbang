@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+
+# Install Clojure
+
+[[ $(id -u) != 0 ]] && echo "Error: Must be run as sudo/root." && exit 1
+
+
+clojure_version=1.10.1.536
+java_version=11
+
+
+## Install Java virtual machine
+if ! command -v java >/dev/null; then
+	if [[ $(os-name) = "centos" ]]; then
+		sudo dnf install -y java-$java_version-openjdk
+	fi
+fi
+
+
+## Download and execute installation script for Clojure
+if [[ ! -x /usr/local/bin/clojure ]]; then
+	file="linux-install-$clojure_version.sh"
+	curl -O "https://download.clojure.org/install/$file"
+
+	mv "$file" "clojure-$file"
+	file="clojure-$file"
+
+	chmod +x "$file"
+	sudo "./$file"
+fi
+
+
+## Install rlwrap for clj (interactive Clojure on command line)
+if ! command -v rlwrap >/dev/null; then
+	if [[ $(os-name) = "centos" ]]; then
+		sudo dnf install -y rlwrap
+	fi
+fi
