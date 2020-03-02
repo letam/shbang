@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+
+# Install PHP
+
+[[ $(id -u) != 0 ]] && echo "Error: Must be run as sudo/root." && exit 1
+
+
+php_version=7.4
+
+centos_version=8
+
+
+[[ $(command -v php) != "" ]] && echo "PHP is already installed." && exit 1
+
+if [[ $(os-name) = centos ]]; then
+	# Source: https://rpms.remirepo.net/wizard/
+
+	# Install the EPEL repository configuration package:
+	dnf install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-$centos_version.noarch.rpm
+
+	# Install the Remi repository configuration package:
+	dnf install -y https://rpms.remirepo.net/enterprise/remi-release-$centos_version.rpm
+
+	# Install the yum-utils package (for the yum-config-manager command):
+	dnf install -y yum-utils
+
+	# Enable the module stream for $php_version:
+	dnf module reset -y php
+	dnf module install -y php:remi-$php_version
+
+	# Upgrade (the repository only provides PHP):
+	dnf -y update
+
+	# Install additional packages:
+	#dnf install php-xxx
+
+	# Install testing packages:
+	#dnf --enablerepo=remi-modular-test install php-xxx
+
+	# Check the installed version and available extensions:
+	php --version
+	php --modules
+fi
+
