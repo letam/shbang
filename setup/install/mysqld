@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+
+# Install MySQL Database Server
+
+[[ $(id -u) != 0 ]] && >&2 echo "Error: Must be run as sudo/root." && exit 1
+
+
+if ! command -v mysqld >/dev/null; then
+	sudo dnf install -y mysql-server
+	sudo systemctl enable --now mysqld
+fi
+systemctl status -l --no-pager mysqld
+
+### Add user to mysql group for read access to database server logs
+sudo usermod -aG mysql $SUDO_USER
+
+
+# TODO: Secure server
