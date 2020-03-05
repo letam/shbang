@@ -67,6 +67,15 @@ cat /etc/nginx/sites-available/default \
 		s|([ \t]+root[ \t]+).*;$|\1$html_dir;|;
 	" | sudo tee $nginx_conf >/dev/null
 
+### Set up logging
+sudo mkdir -vp /var/log/nginx/$domain
+if ! grep -q access_log $nginx_conf; then
+	sudo sed -i -E "s|^(([ \t]*)root .*)$|\1\n\n\
+\2access_log   /var/log/nginx/$domain/access.log;\n\
+\2error_log    /var/log/nginx/$domain/error.log;|
+		" $nginx_conf
+fi
+
 ### Include www subdomain in config if domain is root
 server_names=$domain
 is_not_subdomain="test $(echo $domain | tr -dc "." | wc -c) -eq 1"
