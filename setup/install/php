@@ -12,6 +12,7 @@ centos_version=8
 
 [[ $(command -v php) != "" ]] && echo "PHP is already installed." && exit 1
 
+
 if [[ $(os-name) = centos ]]; then
 	# Source: https://rpms.remirepo.net/wizard/
 
@@ -40,5 +41,20 @@ if [[ $(os-name) = centos ]]; then
 	# Check the installed version and available extensions:
 	php --version
 	php --modules
+fi
+
+
+# Enable systemd service
+if ! systemctl list-unit-files --state=enabled | grep -q php-fpm; then
+	systemctl enable --now php-fpm
+fi
+systemctl status -l --no-pager php-fpm
+
+
+# Ensure the log directory is part of the "adm" group for good read access
+log_dir=/var/log/php-fpm
+chdirgroup "$log_dir" adm
+if [[ $(ls "$log_dir" | wc -l) != 0 ]]; then
+	chmod -v -R g+r "$log_dir"/*
 fi
 

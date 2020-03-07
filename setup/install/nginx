@@ -73,18 +73,7 @@ fi
 
 
 # Ensure the log directory is part of the "adm" group for good read access
-if [[ ! -d /var/log/nginx ]]; then
-	sudo mkdir -vp /var/log/nginx
-fi
-if [[ $(stat -c "%G" /var/log/nginx) != adm ]]; then
-	sudo chown -v :adm /var/log/nginx
-fi
-
-## Set new files in directory to inherit the group of its parent directory
-sudo chmod -v g+s /var/log/nginx
-
-## Recursively update group property of existing files and directories
-sudo chown -v -R :adm /var/log/nginx/*
+sudo chdirgroup /var/log/nginx adm
 
 
 # Nginx Configuration

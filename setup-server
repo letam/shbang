@@ -64,6 +64,7 @@ sbin_script_files=(
 	reboot.sh	# Reboot system after writing log
 	on-poweron	# Cronjob script to execute upon system poweron (includes logging)
 	os-name		# Return OS name of current system
+	chdirgroup	# Recursively update group owner of directory
 )
 for file in "${sbin_script_files[@]}"; do
 	script=$(<"./sbin/$file")

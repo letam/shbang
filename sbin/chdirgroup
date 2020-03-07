@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+
+# Recursively update the group owner of a directory
+
+dir="$1"; shift
+[[ $dir == "" ]] && echo "Error: Argument for directory required." && exit 1
+
+group="$1"; shift
+[[ $group == "" ]] && echo "Error: Argument for group required." && exit 1
+
+
+# Create directory if it does not exist
+if [[ ! -d $dir ]]; then
+    mkdir -vp "$dir"
+fi
+
+# Change group owner of directory if it does not match
+if [[ $(stat -c "%G" "$dir") != "$group" ]]; then
+    chown -v :"$group" "$dir"
+else
+	echo "ownership of $dir retained"
+fi
+
+# Set new files created in directory to inherit the group of its parent directory
+chmod -v g+s "$dir"
+
+# Recursively update the group owner of existing files and directories
+if [[ $(ls "$dir" | wc -l) != 0 ]]; then
+	chown -v -R :"$group" "$dir"/*
+fi
+
