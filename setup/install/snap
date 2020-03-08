@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+
+# Install Snap application manager
+
+
+[[ $(id -u) != 0 ]] && echo "Error: Must be run as sudo/root." && exit 1
+
+is_centos() {
+	[[ -f /etc/centos-release ]]
+}
+is_ubuntu() {
+	[[ $(uname -a) =~ Ubuntu ]]
+}
+
+if is_centos; then
+	# Ensure that Extra Packages for Enterprise Linux (EPEL) is installed and updated.
+	#sudo dnf install -y epel-release
+	centos_version=$(cat /etc/system-release | sed -E "s|.*release ([0-9]+)\..*|\1|")
+	sudo dnf install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-$centos_version.noarch.rpm
+	sudo dnf config-manager --set-enabled PowerTools
+
+	# Install Snap application manager
+	sudo dnf install -y snapd
+	sudo systemctl enable --now snapd.socket
+	sudo ln -s /var/lib/snapd/snap /snap
+
+	echo "Note: Either restart your session to update your PATH, or run the following:"
+	echo "PATH=\$PATH:/var/lib/snapd/snap/bin"
+fi
