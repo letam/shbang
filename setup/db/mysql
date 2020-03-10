@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+
+# Create database for project
+
+[[ $db_name = "" ]] && >&2 echo "Error: Missing argument for \$db_name." && exit 1
+[[ $db_user = "" ]] && >&2 echo "Error: Missing argument for \$db_user." && exit 1
+[[ $db_password = "" ]] && >&2 echo "Error: Missing argument for \$db_password." && exit 1
+
+mysql_root_pw=$(cat /home/$SUDO_USER/.credentials/mysql_root_pw)
+
+
+## Create database and user
+echo "INFO: Creating database '$db_name' and user '$db_user'"
+mysql -uroot -p$mysql_root_pw -e "
+	CREATE DATABASE $db_name DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+	CREATE USER '$db_user'@'localhost' IDENTIFIED BY '$db_password';
+	GRANT ALL PRIVILEGES ON $db_name.* TO '$db_user'@'localhost';
+	FLUSH PRIVILEGES;
+	"
+
+
+## Query to confirm that newly created user can access database
+echo "INFO: Verifying that user can access database"
+mysql -u$db_user -p$db_password $db_name -e '
+	status
+
+	CREATE TABLE IF NOT EXISTS `users` (
+	  `id` INT AUTO_INCREMENT,
+	  `name` VARCHAR(255),
+	  PRIMARY KEY (`id`)
+	)
+
+	INSERT INTO users (name) VALUES ("Adam");
+	INSERT INTO users (name) VALUES ("Eve");
+	'

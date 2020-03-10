@@ -1,0 +1,274 @@
+#!/usr/bin/env bash
+
+# Set up Wordpress website and serve with PHP-FPM and Nginx
+
+[[ $(id -u) != 0 ]] && >&2 echo "Error: Must be run as sudo/root." && exit 1
+
+# Arguments
+
+domain=$1
+if [[ $domain = "" ]]; then
+	>&2 echo "Error: Argument for domain required."
+	exit 1
+fi
+
+
+# Auxiliary functions
+
+is_centos() {
+	[[ -f /etc/centos-release ]]
+}
+is_ubuntu() {
+	[[ $(uname -a) =~ "Ubuntu" ]]
+}
+
+
+# Dependencies
+
+# TODO: Update code to work on Ubuntu
+if ! is_centos; then
+	>&2 echo "Error: Not yet implemented for this OS."
+	exit 1
+fi
+
+## Install Perl if not found
+if ! command -v perl >/dev/null; then
+	[[ ! -d /var/log/setup/install ]] && mkdir -vp /var/log/setup/install
+	printf "INFO: Installing Perl..."
+	sudo $(dirname $0)/../install/perl
+		2>&1 | tee /var/log/setup/install/perl >/dev/null
+	echo " DONE! [$(date)]"
+fi
+
+## Install PHP if not found
+if ! command -v php >/dev/null; then
+	[[ ! -d /var/log/setup/install ]] && mkdir -vp /var/log/setup/install
+	printf "INFO: Installing PHP..."
+	sudo $(dirname $0)/../install/php
+		2>&1 | tee /var/log/setup/install/php >/dev/null
+	echo " DONE! [$(date)]"
+fi
+
+
+# Main
+
+echo "INFO [$(date)]: Begin Wordpress setup."
+
+
+## Set variables for paths of interest
+project_dir=/var/www/$domain
+html_dir=/var/www/$domain/html
+nginx_conf=/var/www/$domain/nginx.conf
+
+
+## Set up HTML website first
+$(dirname $0)/html $domain
+
+
+## Create database on localhost
+
+### Store SQL credentials in file
+sql_friendly_name=$(echo $domain | tr "." "_")
+db_name="wp_$sql_friendly_name"
+db_user="$db_name"
+db_password="$(randpw)!"
+db_host=localhost
+
+cat >> $project_dir/credentials.txt <<-EOF
+
+	# DOMAIN: $domain
+
+
+	# SQL
+	db_name='$db_name'
+	db_user='$db_user'
+	db_password='$db_password'
+	db_host='$db_host'
+
+	EOF
+
+### Run SQL commands
+source "$(dirname $0)/../db/mysql"
+
+
+## Install Wordpress
+
+### Download latest version of Wordpress
+### (re-download if cached archive is older than 6 hours)
+
+downloads_dir=/home/$SUDO_USER/downloads
+[[ ! -d $downloads_dir ]] && mkdir -v $downloads_dir
+cd $downloads_dir
+
+if [[ ! -f wordpress.tgz ]] || find . -name wordpress.tgz -mmin +$((60*6)); then
+	curl --output wordpress.tgz -L "https://wordpress.org/latest.tar.gz"
+fi
+
+### Extract Wordpress archive and place contents in project html directory
+echo "Extracting files from archive..."
+tar -zxf wordpress.tgz
+if [[ -d $html_dir ]]; then
+	mv -v "$html_dir" "$html_dir".bak.$(date -u +%Y-%m-%d-%H%M%S)
+fi
+mv -v wordpress "$html_dir"
+
+cd -
+
+
+## Add 50x and 404 files
+echo "Error" > "$html_dir/50x.html"
+echo "Not found" > "$html_dir/404.html"
+
+
+## Set correct permissions on files
+echo "Execute: chown -R $SUDO_USER:apache $html_dir"
+sudo chown -R "$SUDO_USER:apache" "$html_dir"
+sudo chmod -v g+w "$html_dir"
+
+echo "Execute: chmod -R g+w $html_dir/wp-content"
+sudo chmod -R g+w "$html_dir/wp-content"
+sudo chmod -v g+s "$html_dir/wp-content"
+sudo -u $SUDO_USER mkdir -vp "$html_dir/wp-content/uploads"
+sudo chmod -v g+w "$html_dir/wp-content/uploads"
+
+### SELinux file context for uploads directory
+sudo chcon -vt httpd_sys_rw_content_t "$html_dir/wp-content/uploads"
+
+
+## Nginx Config
+bak "$nginx_conf"
+{
+	tab=$(grep -m1 -E "^\s+.*" "$nginx_conf" | sed -E "s|^([ \t]+).*|\1|")
+
+	## Set location blocks for php pages and wp-admin
+	#perl -i -pe "BEGIN{undef $/;}
+	perl -i -p0e "
+		s|^(\s+location / \{)[^\}]*\}\n\
+|\1
+${tab}${tab}try_files \\\$uri \\\$uri/ /index.php\\\$is_args\\\$args;
+${tab}}
+
+${tab}location = /wp-admin/ {
+${tab}${tab}rewrite (.*) /wp-admin/index.php;
+${tab}}
+|m" "$nginx_conf"
+
+}
+systemctl reload nginx
+
+
+## Wordpress Configuration
+## Automate the "famous five-minute WordPress installation"
+echo -e "\nAutomate the \"famous five-minute WordPress installation\"..."
+echo -e "\nSetting up wp-config.php..."
+
+### Set SELinux file context to temporarily allow server app to write to system at website directory
+sudo chcon -vt httpd_sys_rw_content_t "$html_dir"
+#* View file context of files in directory via: ls -l -Z "$html_dir"
+
+
+### Set database credentials
+
+echo "Breathe, before sending first request to server..."
+sleep 1  # Wait a sec for some breathing room
+# TODO: Ping server before submitting any data.
+
+echo "Set database credentials via POST request to /wp-admin/setup-config.php?step=2 ..."
+curl -si "https://$domain/wp-admin/setup-config.php?step=2" \
+	-XPOST \
+	--data "dbname=$db_name&uname=$db_user&pwd=$db_password&dbhost=$db_host&prefix=wp_&&submit=Submit" \
+	| head -1
+
+#### Alternative method to set db credentials and authentication keys and salt
+#cd $html_dir
+#cp -vp wp-config-sample.php wp-config.php
+
+##### Write to files
+#sed -i -E "\
+#    s|database_name_here|$db_name|;\
+#    s|username_here|$db_user|;\
+#    s|password_here|$db_password|;\
+#    s|'localhost'|'$db_host'|;\
+#    " wp-config.php
+
+#### Set Authentication Unique Keys and Salts
+#echo "Set Authentication Unique Keys and Salts..."
+
+##### Get salt values
+#link="$(grep "https:.*/salt" wp-config.php | sed -E "s|.*(https:.*/salt/?).*|\1|")"
+#values="$(curl -L "$link")"
+
+##### Set placeholder
+#perl -i -p0e "s|define\( 'AUTH_KEY'.*NONCE_SALT[^;]+;|salt_values_go_here|ms" wp-config.php
+
+##### Replace placeholder with salt values
+#python3 -c "
+#with open('wp-config.php') as f:
+#    for x in f: print(
+#        '''$values\n''' if x.startswith('salt_values_go_here') else x
+#        ,end=''
+#    )
+#" >> wp-config.php.tmp
+
+###### Alternative method to replace placeholder using bash:
+##while IFS= read -r line; do
+##    if [[ $line =~ ^salt_values_go_here ]]; then
+##        echo "$values" >> wp-config.php.tmp
+##    else
+##        echo "$line" >> wp-config.php.tmp
+##    fi
+##done < wp-config.php
+
+#mv wp-config.php.tmp wp-config.php
+#cd - >/dev/null
+
+
+### Update permissions on wp-config.php file
+chmod 440 $html_dir/wp-config.php
+
+
+### Create admin user on wordpress
+
+website_title="$domain"
+wp_user="root"
+wp_user_password="$(randpw)"
+wp_user_email="$wp_user@$domain"
+
+### Store Wordpress user credentials in file
+echo "Saving credentials for Wordpress admin user to file: $project_dir/credentials.txt"
+cat >> $project_dir/credentials.txt <<-EOF
+
+	# WORDPRESS
+	website_title='$website_title'
+	wp_user='$wp_user'
+	wp_user_password='$wp_user_password'
+	wp_user_email='$wp_user_email'
+
+	EOF
+
+echo "Create Wordpress admin user via POST request to /wp-admin/install.php?step=2 ..."
+curl -si "https://$domain/wp-admin/install.php?step=2" \
+	-XPOST \
+	-H "Content-Type: application/x-www-form-urlencoded" \
+	--data "weblog_title=$website_title&user_name=$wp_user&admin_password=$wp_user_password&admin_password2=$wp_user_password&admin_email=$wp_user_email&Submit=Install+WordPress" \
+	| head -1
+
+
+### Restore SELinux default labels to disallow server app from writing to system at root website directory
+sudo restorecon -v "$html_dir"
+#ls -lZ "$html_dir"
+
+
+## Allow wordpress to write to file system
+echo "Update wp-config to allow Wordpress to write to filesystem to install plugins"
+echo -e "\n\n/** Allow Wordpress app to write to filesystem, to install plugins **/\ndefine('FS_METHOD', 'direct');\n" >> $html_dir/wp-config.php
+
+
+## Set SELinux permissions for wordpress to write to wp-content folder and descendants
+sudo restorecon -v "$html_dir/wp-content"
+echo "Set SELinux file context for all files in $html_dir/wp-content/*"
+sudo restorecon -R "$html_dir/wp-content/*"
+
+
+echo "INFO [$(date)]: End of Wordpress setup!"
+

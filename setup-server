@@ -65,6 +65,7 @@ sbin_script_files=(
 	on-poweron	# Cronjob script to execute upon system poweron (includes logging)
 	os-name		# Return OS name of current system
 	chdirgroup	# Recursively update group owner of directory
+	randpw		# Generate a random password
 )
 for file in "${sbin_script_files[@]}"; do
 	script=$(<"./sbin/$file")

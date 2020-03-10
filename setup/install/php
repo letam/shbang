@@ -10,7 +10,7 @@ php_version=7.4
 centos_version=8
 
 
-[[ $(command -v php) != "" ]] && echo "PHP is already installed." && exit 1
+[[ $(command -v php) != "" ]] && >&2 echo "PHP is already installed." && exit 1
 
 
 if [[ $(os-name) = centos ]]; then
@@ -35,6 +35,9 @@ if [[ $(os-name) = centos ]]; then
 	# Install additional packages:
 	#dnf install php-xxx
 
+	# Install PDO SQL database extension and the PDO driver for MySQL
+	dnf install -y php-pdo php-pdo_mysql
+
 	# Install testing packages:
 	#dnf --enablerepo=remi-modular-test install php-xxx
 
@@ -58,3 +61,4 @@ if [[ $(ls "$log_dir" | wc -l) != 0 ]]; then
 	chmod -v -R g+r "$log_dir"/*
 fi
 
+# TODO: Ensure files php-fpm and php.conf exist
