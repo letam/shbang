@@ -99,6 +99,16 @@ if grep -q "^\sgzip[ _]" /etc/nginx/nginx.conf; then
 	sed -i -E "s/^([ \t\]+gzip.*;)/#\1/" /etc/nginx/nginx.conf
 fi
 
+## Set max size of request from client
+if [[ ! -f /etc/nginx/conf.d/client.conf ]] || \
+	! grep -q client_max_body_size /etc/nginx/conf.d/client.conf
+then
+	sudo tee -a /etc/nginx/conf.d/client.conf >/dev/null <<-"EOF"
+
+	client_max_body_size 5M;
+	EOF
+fi
+
 
 ## Set up log file rotation
 # TODO
