@@ -71,7 +71,7 @@ $(dirname $0)/html $domain
 sql_friendly_name=$(echo $domain | tr "." "_")
 db_name="wp_$sql_friendly_name"
 db_user="$db_name"
-db_password="$(randpw)!"
+db_password="$(randpw)"
 db_host=localhost
 
 cat >> $project_dir/credentials.txt <<-EOF
@@ -174,20 +174,24 @@ sleep 1  # Wait a sec for some breathing room
 # TODO: Ping server before submitting any data.
 
 echo "Set database credentials via POST request to /wp-admin/setup-config.php?step=2 ..."
+password_encoded=$(php -r "echo urlencode('$db_password');")
 curl -si "https://$domain/wp-admin/setup-config.php?step=2" \
 	-XPOST \
-	--data "dbname=$db_name&uname=$db_user&pwd=$db_password&dbhost=$db_host&prefix=wp_&&submit=Submit" \
+	--data "dbname=$db_name&uname=$db_user&pwd=$password_encoded&dbhost=$db_host&prefix=wp_&&submit=Submit" \
 	| head -1
 
 #### Alternative method to set db credentials and authentication keys and salt
 #cd $html_dir
 #cp -vp wp-config-sample.php wp-config.php
 
+##### Escape special characters in password before using in sed replacement
+#db_password_escaped=$(echo $db_password | sed "s/&/\\\&/g")
+
 ##### Write to files
 #sed -i -E "\
 #    s|database_name_here|$db_name|;\
 #    s|username_here|$db_user|;\
-#    s|password_here|$db_password|;\
+#    s|password_here|$db_password_escaped|;\
 #    s|'localhost'|'$db_host'|;\
 #    " wp-config.php
 
@@ -247,10 +251,11 @@ cat >> $project_dir/credentials.txt <<-EOF
 	EOF
 
 echo "Create Wordpress admin user via POST request to /wp-admin/install.php?step=2 ..."
+password_encoded=$(php -r "echo urlencode('$wp_user_password');")
 curl -si "https://$domain/wp-admin/install.php?step=2" \
 	-XPOST \
 	-H "Content-Type: application/x-www-form-urlencoded" \
-	--data "weblog_title=$website_title&user_name=$wp_user&admin_password=$wp_user_password&admin_password2=$wp_user_password&admin_email=$wp_user_email&Submit=Install+WordPress" \
+	--data "weblog_title=$website_title&user_name=$wp_user&admin_password=$password_encoded&admin_password2=$password_encoded&admin_email=$wp_user_email&Submit=Install+WordPress" \
 	| head -1
 
 

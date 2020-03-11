@@ -17,9 +17,13 @@
  * @return string
  */
 
-define("KEYSPACE",
+define("ALPHANUMERIC",
 	"0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 );
+define("SPECIAL_CHARS",
+	"!@#$%^&*()"
+);
+define("KEYSPACE", ALPHANUMERIC . SPECIAL_CHARS);
 
 function random_str(int $length = 64, string $keyspace = KEYSPACE): string {
 	if ($length < 1) {
@@ -27,8 +31,16 @@ function random_str(int $length = 64, string $keyspace = KEYSPACE): string {
 	}
 	$pieces = [];
 	$max = mb_strlen($keyspace, "8bit") - 1;
+	$has_special_char = false;
 	for ($i = 0; $i < $length; ++$i) {
 		$pieces []= $keyspace[random_int(0, $max)];
+		if (strpos(SPECIAL_CHARS, $pieces[$i]) !== false) {
+			$has_special_char = true;
+		}
+	}
+	if (!$has_special_char) {
+		$pieces[random_int(0, $length)] =
+			SPECIAL_CHARS[random_int(0, mb_strlen(SPECIAL_CHARS, "8bit") - 1)];
 	}
 	return implode("", $pieces);
 }
