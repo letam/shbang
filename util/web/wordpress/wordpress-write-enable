@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+
+# Allow Wordpress app to write to entire site directory, for updates
+
+[[ $(id -u) != 0 ]] && >&2 echo "Error: Must be sudo/root." && exit 1
+
+html_dir="$1"
+[[ $html_dir == "" ]] && >&2 echo "Error: Directory required." && exit 1
+
+
+## Set permissions for wordpress to write to entire site directory, for updates
+echo "Update security context of all site files to allow wordpress app to write to entire directory."
+ls -l -Z $html_dir
+
+#sudo chcon -R unconfined_u:object_r:httpd_sys_rw_content_t:s0 $html_dir
+#sudo chcon unconfined_u:object_r:httpd_sys_rw_content_t:s0 $html_dir
+
+#sudo chcon -R -t httpd_sys_rw_content_t $html_dir
+sudo chcon -t httpd_sys_rw_content_t $html_dir
+
+sudo restorecon -vR $html_dir
+sudo chmod g+w -R $html_dir
+
+echo "Updated context:"
+ls -l -Z $html_dir
+
