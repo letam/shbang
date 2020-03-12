@@ -17,13 +17,13 @@
  * @return string
  */
 
-define("ALPHANUMERIC",
-	"0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
-);
-define("SPECIAL_CHARS",
-	"!@#$%^&*()"
-);
-define("KEYSPACE", ALPHANUMERIC . SPECIAL_CHARS);
+define("NUMERIC", "0123456789");
+define("ALPHA", "abcdefghijklmnopqrstuvwxyz");
+define("ALPHA_UPPER", strtoupper(ALPHA));
+define("SPECIAL_CHARS", "!@#$%^&*()");
+
+define("KEYSPACE", ALPHA_UPPER . ALPHA . NUMERIC . SPECIAL_CHARS);
+
 
 function random_str(int $length = 64, string $keyspace = KEYSPACE): string {
 	if ($length < 1) {
@@ -31,18 +31,37 @@ function random_str(int $length = 64, string $keyspace = KEYSPACE): string {
 	}
 	$pieces = [];
 	$max = mb_strlen($keyspace, "8bit") - 1;
-	$has_special_char = false;
+	// Build up random string
 	for ($i = 0; $i < $length; ++$i) {
 		$pieces []= $keyspace[random_int(0, $max)];
-		if (strpos(SPECIAL_CHARS, $pieces[$i]) !== false) {
-			$has_special_char = true;
-		}
 	}
-	if (!$has_special_char) {
-		$pieces[random_int(0, $length)] =
-			SPECIAL_CHARS[random_int(0, mb_strlen(SPECIAL_CHARS, "8bit") - 1)];
-	}
+
+	// Ensure that random string contains one of every type of character
+	$pieces = contain_one_of_each($pieces, [ALPHA_UPPER, ALPHA, NUMERIC, SPECIAL_CHARS]);
+
 	return implode("", $pieces);
+}
+
+/**
+ * Return copy of array $pieces in which there are replacements such that one of
+ * each character in array $groups is in copy.
+ *
+ */
+function contain_one_of_each(array $pieces, array $groups) {
+	// Insert one of each character into array (replacing at index $i)
+	for ($i = 0, $len = count($groups); $i < $len; ++$i) {
+		$group = $groups[$i];
+		$pieces[$i]= $group[random_int(0, mb_strlen($group, "8bit") - 1)];
+	}
+	// Swap newly inserted character with random character in rest of string
+	// to shuffle them around.
+	for ($i = 0, $len = count($groups); $i < $len; ++$i) {
+		$tmp = $pieces[$i];
+		$rand_i = random_int($i, count($pieces) - 1);
+		$pieces[$i] = $pieces[$rand_i];
+		$pieces[$rand_i] = $tmp;
+	}
+	return $pieces;
 }
 
 if (PHP_SAPI === "cli") {
