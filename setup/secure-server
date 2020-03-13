@@ -3,6 +3,7 @@
 # Setup and secure server
 # - sets up log directories for system setup and stats
 # - enables firewall allowing only SSH connections
+# - enables automatic security updates to system
 # - sets update script to be executed as a cronjob at the next minute
 # - writes SSH authorized keys if provided, and then disables SSH password auth
 # - creates sudo user with authorized keys, if spcified
@@ -169,6 +170,25 @@ if is_centos && ! systemctl -q is-active crond; then
 elif is_ubuntu && ! systemctl -q is-active cron.service; then
 	sudo systemctl enable cron.service
 	sudo service cron start
+fi
+
+
+# Enable automatic security updates to system
+if is_centos; then
+	echo "INFO: Enable automatic security updates to system."
+	# TODO: Look into throttling download speeds when downloading automatic updates
+	sudo dnf install -y dnf-automatic
+	sudo bak /etc/dnf/automatic.conf
+	sudo sed -i -E "
+		s|(upgrade_type = )default|\1security|;
+		s|(apply_updates = )no|\1yes|;
+		s|(emit_via = )stdio|\1email,stdio,motd|;
+		" /etc/dnf/automatic.conf
+	if [[ $HOSTNAME != "" ]]; then
+		sudo sed -i -E " s|(email_from = root@)example.com|\1$HOSTNAME|" \
+			/etc/dnf/automatic.conf
+	fi
+	sudo systemctl enable --now dnf-automatic.timer
 fi
 
 
