@@ -75,6 +75,10 @@ if ! grep -q access_log $nginx_conf; then
 \2error_log    /var/log/nginx/$domain/error.log;|
 		" $nginx_conf
 fi
+## Add logrotate config
+echo "Adding logrotate config..."
+cat /etc/logrotate.d/nginx | sed -E " s|(/log/nginx/)(\*log)|\1$domain/\2|; " \
+	| sudo tee /etc/logrotate.d/nginx-$domain >/dev/null
 
 ### Include www subdomain in config if domain is root
 server_names=$domain
