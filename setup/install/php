@@ -61,4 +61,40 @@ if [[ $(ls "$log_dir" | wc -l) != 0 ]]; then
 	chmod -v -R g+r "$log_dir"/*
 fi
 
-# TODO: Ensure files php-fpm and php.conf exist
+
+# Ensure existence of PHP socket configuration for Nginx server blocks
+[[ ! -d /etc/nginx/conf.d ]] && mkdir -vp /etc/nginx/conf.d
+if [[ -d /etc/nginx/conf.d && ! -f /etc/nginx/conf.d/php-fpm.conf ]]; then
+	echo "Creating /etc/nginx/conf.d/php-fpm.conf..."
+	sudo tee /etc/nginx/conf.d/php-fpm.conf >/dev/null <<"EOF"
+# PHP-FPM FastCGI server
+# network or unix domain socket configuration
+
+upstream php-fpm {
+    server unix:/run/php-fpm/www.sock;
+}
+EOF
+fi
+
+# Ensure existence of PHP file configuration for Nginx server blocks
+[[ ! -d /etc/nginx/default.d ]] && mkdir -vp /etc/nginx/default.d
+if [[ -d /etc/nginx/default.d && ! -f /etc/nginx/default.d/php.conf ]]; then
+	echo "Creating /etc/nginx/default.d/php.conf..."
+	sudo tee /etc/nginx/default.d/php.conf >/dev/null <<"EOF"
+# pass the PHP scripts to FastCGI server
+#
+# See conf.d/php-fpm.conf for socket configuration
+#
+index index.php index.html index.htm;
+
+location ~ \.php$ {
+    try_files $uri =404;
+    fastcgi_intercept_errors on;
+    fastcgi_index  index.php;
+    include        fastcgi_params;
+    fastcgi_param  SCRIPT_FILENAME  $document_root$fastcgi_script_name;
+    fastcgi_pass   php-fpm;
+}
+EOF
+fi
+
