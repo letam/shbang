@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 
-# Install MySQL Database Server
+# Install MySQL Database Server and automate steps to secure installation
 
 [[ $(id -u) != 0 ]] && >&2 echo "Error: Must be run as sudo/root." && exit 1
 
 
+## Install MySQL daemon service and enable it
 if ! command -v mysqld >/dev/null; then
 	sudo dnf install -y mysql-server
 	sudo systemctl enable --now mysqld
@@ -15,4 +16,88 @@ systemctl status -l --no-pager mysqld
 sudo usermod -aG mysql $SUDO_USER
 
 
-# TODO: Secure server
+## Secure database server for deployment
+
+### Create root password for MySQL and store it in file
+pw_file="/home/$SUDO_USER/.credentials/mysql_root_pw"
+if [[ ! -f $pw_file ]]; then
+	if [[ ! -d /home/$SUDO_USER/.credentials ]]; then
+		sudo -u $SUDO_USER mkdir -vp /home/$SUDO_USER/.credentials
+	fi
+	echo "rootPassword1@localhost" | sudo -u $SUDO_USER tee $pw_file >/dev/null
+fi
+mysql_root_pw=$(cat $pw_file)
+
+### Ensure expect is installed
+if ! command -v expect >/dev/null; then
+	echo "Installing expect..."
+	sudo dnf install -y expect
+fi
+
+### Automate mysql_secure_installation
+expect -f - <<EOF
+
+spawn mysql_secure_installation
+
+expect {
+	"Would you like to setup VALIDATE PASSWORD component?" {
+		expect "Press y|Y for Yes, any other key for No: "
+		send "y\r"
+		expect "Please enter 0 = LOW, 1 = MEDIUM and 2 = STRONG: "
+		send "0\r"
+		exp_continue
+	}
+	"Please set the password for root here." {
+		expect "New password: "
+		send "$mysql_root_pw\r"
+
+		expect "Re-enter new password: "
+		send "$mysql_root_pw\r"
+
+		expect "Do you wish to continue with the password provided?"
+		send "y\r"
+	}
+	"Enter password for user root:" {
+		send "$mysql_root_pw\r"
+		expect "Change the password for root ?"
+		send "\r"
+	}
+}
+
+expect "Remove anonymous users? "
+send "y\r"
+
+expect "Disallow root login remotely? "
+send "y\r"
+
+expect "Remove test database and access to it? "
+send "y\r"
+
+expect "Reload privilege tables now? "
+send "y\r"
+
+expect eof
+EOF
+
+
+### Backup /var/lib/mysql/mysqld-auto.cnf
+[[ -f /var/lib/mysql/mysqld-auto.cnf ]] && sudo bak /var/lib/mysql/mysqld-auto.cnf
+
+### Set minimum password length
+password_length=16
+echo "Set minimum password length to $password_length..."
+mysql -uroot -p$mysql_root_pw -e "
+	SET PERSIST validate_password.length = $password_length;
+	"
+
+
+### Notes for security settings
+
+#### Do not require multiple character types
+#mysql -uroot -p$mysql_root_pw -e "
+#    SET PERSIST validate_password.policy = 'LOW';
+#    "
+
+#### Display system variables
+#mysql -uroot -p$mysql_root_pw -e "SHOW VARIABLES LIKE 'validate%';"
+
