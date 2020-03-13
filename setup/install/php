@@ -98,3 +98,10 @@ location ~ \.php$ {
 EOF
 fi
 
+# Install Composer package dependency manager for PHP projects
+if $(dirname $0)/composer; then
+	mv -v composer.phar /usr/local/bin/composer
+else
+	echo "Error: Could not download composer.phar!"
+fi
+
