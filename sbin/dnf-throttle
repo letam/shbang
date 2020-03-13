@@ -1,0 +1,9 @@
+#!/usr/bin/env
+
+# Throttle DNF (package manager) download speed
+
+if ! grep -q "^throttle=" /etc/dnf/dnf.conf; then
+	sudo bak /etc/dnf/dnf.conf
+	echo "throttle=10M" | sudo tee -a /etc/dnf/dnf.conf >/dev/null
+fi
+
