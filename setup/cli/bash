@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+
+# Basic Bash settings
+
+
+## Backup initial .bashrc file
+file=~/.bashrc
+cp -p $file $file.bak.$(date -u +%Y-%m-%d-%H%M%S)
+
+
+## Add history settings
+cat >> ~/.bashrc <<-"EOF"
+
+
+	# History settings
+
+	## Ignore lines that begin with a space, and ignore duplicate entries
+	HISTCONTROL=ignorespace:ignoredups
+
+	## Increase history sizes
+	HISTSIZE=1000000
+	HISTFILESIZE=2000000
+
+	## Save to history immediately
+	PROMPT_COMMAND="history -a;$PROMPT_COMMAND"
+
+	## Save time of command in history
+	HISTTIMEFORMAT="%Y-%m-%d %T "
+
+	EOF
+
