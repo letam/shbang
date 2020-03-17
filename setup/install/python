@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+
+# Install Python code interpreter
+
+
+[[ $(id -u) != 0 ]] && echo "Error: Must be run as sudo/root." && exit 1
+
+
+python_version=3.8.2
+file=Python-$python_version
+
+echo "INFO: Install Python $python_version..."
+
+## Download dependencies to compile Python source code
+dnf install -y gcc openssl-devel bzip2-devel libffi-devel tar make
+dnf install -y sqlite-devel.x86_64
+
+## Download source code bundle
+cd /opt
+curl -LO https://www.python.org/ftp/python/$python_version/$file.tgz
+tar -zv -xf $file.tgz
+
+## Compile and install
+cd $file
+./configure --enable-optimizations
+make altinstall
+cd - >/dev/null
+rm -v $file.tgz
+
+
+## Create system links to access the latest versions of python and pip by plain name
+
+### Get version number used in filename (Remove patch version number)
+file_version=$(echo $python_version | cut -f 1,2 -d ".")
+major_version=$(echo $python_version | cut -f 1 -d ".")
+
+### Link python binary to latest version
+ln -vs /usr/local/bin/python$file_version /usr/bin/python
+if [[ ! -f /usr/bin/python$major_version ]]; then
+	ln -vs /usr/local/bin/python$file_version /usr/bin/python$major_version
+fi
+
+### Link pip binary to latest version
+ln -vs /usr/local/bin/pip$file_version /usr/bin/pip
+if [[ ! -f /usr/bin/pip$major_version ]]; then
+	ln -vs /usr/local/bin/pip$file_version /usr/bin/pip$major_version
+fi
+
+### Update libraries pip and setuptools to latest versions
+echo "INFO: Update libraries pip and setuptools to latest versions..."
+pip install -U pip setuptools
+
