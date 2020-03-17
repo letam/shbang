@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+
+# Copy app files in target directory to destination on remote (or local) server
+
+[[ $# != 2 ]] && >&2 echo "Usage: $0 SRC DEST" && exit 1
+
+
+src="$1" ; shift
+dest="$1" ; shift
+
+
+## Create directory if it does not exist
+if [[ $dest =~ ":" ]]; then
+	remote=$(echo $dest | cut -f 1 -d :)
+	dir=$(echo $dest | cut -f 2 -d :)
+	ssh $remote "[[ ! -d $dir ]] && mkdir -vp $dir"
+else
+	[[ ! -d $dest ]] && mkdir -vp $dest
+fi
+
+
+## Copy files from src to dest
+rsync -vh -azP \
+    --exclude=.env --exclude=venv --exclude=^bin --exclude=tmp --exclude=.git \
+    --exclude=.vscode --exclude=*.sublime-* --exclude=.DS_Store \
+    "$src" "$dest"
+

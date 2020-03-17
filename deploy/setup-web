@@ -1,0 +1,66 @@
+#!/usr/bin/env bash
+
+# Setup app, from script in setup/web, on remote server
+
+[[ $# != 3 ]] && >&2 echo "Usage: $0 APP_NAME WEBSITE_NAME DEST" && exit 1
+
+app_name="$1" ; shift
+website_name="$1" ; shift
+dest="$1" ; shift
+
+dest_user=$(sed -E "s/(.*)@.*/\1/" <<< $dest)
+
+echo "INFO [$(date)]: Begin setup of '$app_name' web app for '$website_name' on remote server."
+
+
+## Copy script directory
+echo "Uploading project files..."
+ssh $dest '
+[[ ! -d /opt/orc ]] && sudo mkdir -vp /opt/orc
+[[ $(stat -c %U /opt/orc) != $USER ]] && sudo chown -v $USER /opt/orc
+'
+$(dirname $0)/../sbin/cp-app-files . $dest:/opt/orc
+
+
+## Transfer Let's Encrypt directory for website if found
+if [[ -f $website_name-letsencrypt.tgz ]] && \
+	! ssh $dest "[[ -d /etc/letsencrypt ]]"
+then
+	$(dirname $0)/upload-letsencrypt $dest $website_name-letsencrypt.tgz
+	[[ $? != 0 ]] && exit 1 || echo
+fi
+
+
+## Create command to execute via SSH
+
+script_path="setup/web/$app_name"
+log="/var/log/$script_path--$website_name"
+
+command="
+
+# Ensure log directory exists
+[[ ! -d /var/log/setup/web ]] && sudo mkdir -vp /var/log/setup/web
+
+echo \"INFO [\$(date)]: Set cronjob so the setup script will run at the next minute.\"
+sudo bak /etc/crontab >/dev/null
+echo \"\
+	* *	* * *	$dest_user	\
+	sudo sed -i \\\"\\|$script_path|d\\\" /etc/crontab \
+	&& echo \"Executing cronjob that was scheduled at: $(date)\" \
+	&& echo \"__START__: \$\(date\)\" | sudo tee -a $log >/dev/null \
+	&& sudo /opt/orc/$script_path $website_name 2>&1 | sudo tee -a $log >/dev/null \
+	&& echo \"__END__: \$\(date\)\" | sudo tee -a $log >/dev/null \
+	# remove_upon_execute \
+	\" | sudo tee -a /etc/crontab >/dev/null
+
+"
+
+ssh $dest "$command"
+
+
+# Note: To remove cronjob specifying $script_path:
+#if grep -q "$script_path" /etc/crontab; then
+#    bak /etc/crontab
+#    sudo sed -i "\|$script_path|d" /etc/crontab
+#fi
+

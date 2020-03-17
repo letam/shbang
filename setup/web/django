@@ -1,0 +1,299 @@
+#!/usr/bin/env bash
+
+# Set up Django web server with SQLite DB and serve with Gunicorn and Nginx
+
+
+[[ $(id -u) != 0 ]] && echo "Error: Must be run as sudo/root." && exit 1
+
+domain=$1
+if [[ $domain = "" ]]; then
+	echo "Error: Argument for domain required."
+	exit 1
+fi
+
+is_centos() {
+	[[ -f /etc/centos-release ]]
+}
+is_ubuntu() {
+	[[ $(uname -a) =~ "Ubuntu" ]]
+}
+
+
+# Dependencies
+
+# TODO: Update code to work for Ubuntu
+if ! is_centos; then
+	>&2 echo "Error: Not yet implemented for this OS."
+	exit 1
+fi
+
+[[ ! -d /var/log/setup/install ]] && mkdir -vp /var/log/setup/install
+
+## Install Python if not found
+if ! command -v python >/dev/null; then
+	printf "INFO: Installing Python..."
+	sudo $(dirname $0)/../install/python \
+		2>&1 | tee -a /var/log/setup/install/python >/dev/null
+	echo " DONE! [$(date)]"
+fi
+
+## Install Nginx if not found
+if ! command -v nginx >/dev/null; then
+	printf "INFO: Installing Nginx..."
+	sudo $(dirname $0)/../install/nginx \
+		2>&1 | tee /var/log/setup/install/nginx >/dev/null
+	echo " DONE! [$(date)]"
+fi
+
+## Install Certbot if not found
+if ! command -v certbot >/dev/null; then
+	printf "INFO: Installing Certbot..."
+	sudo $(dirname $0)/../install/certbot \
+		2>&1 | tee /var/log/setup/install/certbot >/dev/null
+	echo " DONE! [$(date)]"
+fi
+
+## Install Perl if not found
+if ! command -v perl >/dev/null; then
+	printf "INFO: Installing Perl..."
+	sudo $(dirname $0)/../install/perl \
+		2>&1 | tee /var/log/setup/install/perl >/dev/null
+	echo " DONE! [$(date)]"
+fi
+
+## Load SELinux policy settings
+$(dirname $0)/selinux-python-gunicorn-nginx $domain
+
+
+# Set variables for paths of interest
+project_dir=/var/www/$domain
+html_dir=/var/www/$domain/html
+nginx_conf=/var/www/$domain/nginx.conf
+
+
+# Set up HTML website first
+$(dirname $0)/html $domain
+
+
+# Setup Django web application
+
+cd $project_dir
+
+## Setup virtualenv
+python -m venv venv
+source venv/bin/activate
+pip install --upgrade pip setuptools
+pip install Django gunicorn
+
+## Create requirements.txt file
+pip list | grep -E "(\
+Django |\
+gunicorn \
+)" | tr -s " " | sed "s/ /==/" > requirements.txt
+
+## Create Django project
+django-admin startproject server
+
+### Reconfig project files to use "config" directory to hold core settings and urls
+mv -v server/server server/config
+sed -i -E "s/server(\.(urls|wsgi))/config\1/" server/config/settings.py
+sed -i -E "s/server(\.settings)/config\1/" server/config/wsgi.py
+sed -i -E "s/server(\.settings)/config\1/" server/config/asgi.py
+sed -i -E "s/server(\.settings)/config\1/" server/manage.py
+
+### Create settings for production
+cat > server/config/settings_production.py <<EOF
+from .settings import *
+
+with open("$project_dir/secret_key.txt") as f:
+	SECRET_KEY = f.read().strip()
+
+DEBUG = False
+
+STATIC_ROOT = "$project_dir/static"
+STATIC_URL = "/static/"
+
+MEDIA_ROOT = "$project_dir/uploads"
+MEDIA_URL = "/uploads/"
+
+ALLOWED_HOSTS = ["$domain"]
+
+EOF
+
+#### Add directory for uploads
+mkdir -v $project_dir/uploads
+
+#### Create secret key for production server
+python -c "from django.core.management import utils
+print(utils.get_random_secret_key())
+" > $project_dir/secret_key.txt
+
+### Create script to run management commands using production settings
+cat > manage-prod <<EOF
+#!/usr/bin/env bash
+
+# Run django-admin manage command using production settings
+[[ \$# = 0 ]] && echo "Error: Argument required." && exit 1
+
+cd $project_dir
+venv/bin/python server/manage.py \$@ --settings=config.settings_production
+
+EOF
+chmod +x manage-prod
+
+### Create script to build project for production in the future
+python_version=$(python -V 2>&1 | cut -f 2 -d " " | cut -f 1,2 -d ".")
+cat > build-prod <<EOF
+#!/usr/bin/env bash
+
+# Build project for production
+
+[[ \$(id -u) != 0 ]] && echo "Error: Must be run as sudo/root." && exit 1
+
+manage() {
+	cd $project_dir
+	venv/bin/python server/manage.py \$@ --settings=config.settings_production
+	cd - >/dev/null
+}
+
+manage migrate
+manage collectstatic --noinput
+# Restore SELinux context of files (default file label should be httpd_sys_content_t)
+echo "BEGIN: Relabel files..."
+#echo "Relabel venv/lib/python$python_version/site-packages and all its contents from unconfined_u:object_r:var_t:s0 to unconfined_u:object_r:httpd_sys_content_t:s0"
+/sbin/restorecon -v -R venv/lib/python$python_version/site-packages
+/sbin/restorecon -v -R server
+/sbin/restorecon -v -R static
+/sbin/restorecon -v -R uploads
+/sbin/restorecon -v secret_key.txt
+/sbin/restorecon -v venv/pyvenv.cfg
+/sbin/restorecon -v venv/bin/gunicorn
+/sbin/restorecon -v nginx.conf
+echo "END: Relabel files!"
+
+EOF
+chmod +x build-prod
+
+
+### Run management commands to build project for production for the first/inital time
+./manage-prod migrate
+./manage-prod collectstatic --noinput
+# Restore SELinux context of files (default file label should be httpd_sys_content_t)
+echo "BEGIN: Relabel files..."
+/sbin/restorecon -v -R venv/lib/python$python_version/site-packages
+/sbin/restorecon -v -R server
+/sbin/restorecon -v -R static
+/sbin/restorecon -v -R uploads
+/sbin/restorecon -v secret_key.txt
+/sbin/restorecon -v venv/pyvenv.cfg
+/sbin/restorecon -v venv/bin/gunicorn
+/sbin/restorecon -v nginx.conf
+echo "END: Relabel files!"
+
+
+cd - >/dev/null
+
+
+## Add 50x and 404 files
+echo "Error" > "$html_dir/50x.html"
+echo "Not found" > "$html_dir/404.html"
+#sudo ln -s "$html_dir/404.html" "$html_dir/40x.html"
+
+
+# Gunicorn Config
+$(dirname $0)/django-gunicorn-service $domain $project_dir
+
+
+## Set owner of $project_dir
+chown -R gunicorn:adm $project_dir
+
+
+# Nginx Config
+
+bak "$nginx_conf"
+
+## Configure Nginx to work with Gunicorn server
+#* Reference: https://docs.gunicorn.org/en/latest/deploy.html
+{
+	var_friendly_name=$(echo $domain | tr "." "_")
+
+	tab=$(grep -m1 -E "^\s+.*" "$nginx_conf" | sed -E "s|^([ \t]+).*|\1|")
+
+	### Set upstream block for connection to Gunicorn server
+	perl -i -p0e "
+		s|^\
+|#* Reference: https://docs.gunicorn.org/en/latest/deploy.html
+
+upstream server__$var_friendly_name {
+${tab}# fail_timeout=0 means we always retry an upstream even if it failed
+${tab}# to return a good HTTP response
+${tab}# for UNIX domain socket setups
+${tab}server unix:/run/$domain-gunicorn.sock fail_timeout=0;
+${tab}# for a TCP configuration
+${tab}# server 192.168.0.7:8000 fail_timeout=0;
+}
+
+|m" "$nginx_conf"
+
+	### Set location blocks for socket to Gunicorn server, and static content directory
+	#perl -i -pe "BEGIN{undef $/;}
+	perl -i -p0e "
+		s|^(\s+location / \{)[^\}]*\}\n\
+|\1
+#${tab}${tab}try_files \\\$uri \\\$uri/ /index.php\\\$is_args\\\$args;
+${tab}${tab}try_files \\\$uri \@proxy_to_app;
+${tab}}
+
+${tab}location \@proxy_to_app {
+${tab}${tab}proxy_set_header X-Forwarded-For \\\$proxy_add_x_forwarded_for;
+${tab}${tab}proxy_set_header X-Forwarded-Proto \\\$scheme;
+${tab}${tab}proxy_set_header Host \\\$http_host;
+
+${tab}${tab}# we don't want nginx trying to do something clever with
+${tab}${tab}# redirects, we set the Host: header above already.
+${tab}${tab}proxy_redirect off;
+
+${tab}${tab}proxy_pass http://server__$var_friendly_name;
+${tab}}
+
+${tab}location = /favicon.ico { access_log off; log_not_found off; }
+
+${tab}location ^~ /static/ {
+#${tab}${tab}gzip_static on;
+${tab}${tab}expires 30d;
+${tab}${tab}alias $project_dir/static/;
+${tab}}
+
+${tab}location ^~ /uploads/ {
+${tab}${tab}expires 30d;
+${tab}${tab}alias $project_dir/uploads/;
+${tab}}
+|m" "$nginx_conf"
+
+}
+
+## Restore SELinux context of nginx.conf (i.e. after it's replaced) to allow /usr/sbin/nginx to access it
+/sbin/restorecon -v /var/www/$domain/nginx.conf
+
+## Reload Nginx after server configuration
+systemctl reload nginx
+
+
+# Test that server works
+url="$domain/admin/"
+get_status_code() {
+	url="$1"
+	curl -s -w %{http_code} -L "$url" -o /dev/null
+}
+
+sleep 1
+status_code=$(get_status_code $url)
+if [[ $status_code = 200 ]]; then
+	echo "Success! Request to server returns a 200 (success) response!"
+	echo "Happy coding!"
+else
+	echo "Err... Request to server returns a $status_code response."
+	echo "Please contact me for help at tam@bitesizecode.ca!"
+	exit 1
+fi
+

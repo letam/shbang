@@ -1,0 +1,312 @@
+#!/usr/bin/env bash
+
+# Apply SELinux policy rules for Python app on Gunicorn server as SystemD service
+
+
+[[ $(id -u) != 0 ]] && echo "Error: Must be run as sudo/root." && exit 1
+
+
+domain="$1"
+[[ $# != 1 ]] && echo "Usage: $0 DOMAIN" && exit 1
+
+
+python_version=$(python -V 2>&1 | cut -f 2 -d " " | cut -f 1,2 -d ".")
+
+
+## Set directory to store and compile all policy files
+dir=/var/log/setup/selinux/policy/python$python_version-gunicorn-nginx
+[[ ! -d $dir ]] && mkdir -vp $dir
+
+if [[ -f $dir/DONE ]]; then echo
+	echo "INFO: SELinux policies for this setup are already installed."
+	exit
+fi
+
+
+# SELinux Policy (Permission) Settings
+
+echo "INFO: Started SELinux policy installations at $(date)"
+
+## Install SELinux policy development library
+if [[ ! -f /usr/share/selinux/devel/Makefile ]]; then
+	sudo yum install -y selinux-policy-devel
+fi
+
+
+policy_permissive_domain_gunicorn() {
+	# Add permissive domain policy for Gunicorn
+	#* Reference: https://www.redhat.com/en/blog/setting-django-application-rhel-8-beta
+	if ! sudo semodule -l | grep -q permissive_gunicorn_t; then
+		echo "Adding SELinux permissive domain policy for Gunicorn service..."
+
+		sudo tee $dir/gunicorn.te >/dev/null <<-"EOF"
+		policy_module(gunicorn, 1.0)
+
+		type gunicorn_t;
+		type gunicorn_exec_t;
+		init_daemon_domain(gunicorn_t, gunicorn_exec_t)
+		permissive gunicorn_t;
+		EOF
+
+		cd $dir
+		# Compile policy
+		make -f /usr/share/selinux/devel/Makefile
+		# Load policy
+		sudo semodule -i $dir/*.pp
+		cd - >/dev/null
+
+		### Add policy to system
+		#sudo semanage permissive -a gunicorn_t # TODO: IS THIS NEEDED?
+		#* View permissive policies via: sudo semodule -l | grep permissive
+	else
+		echo "Alright! SELinux permissive domain policy for Gunicorn service already exists."
+	fi
+}
+#policy_permissive_domain_gunicorn
+
+
+add_policy_files_generated_from_audit2allow() {
+	# Add all the policy files (uncompiled) for rules generated from audit2allow
+	#* ala: ausearch -c 'nginx' --raw | audit2allow -M my-nginx.conf
+
+	echo Add policy to address: SELinux is preventing /usr/sbin/nginx from read access on the file nginx.conf.
+	#* type=AVC msg=audit(1584932988.873:915): avc:  denied  { read } for  pid=2456 comm="nginx" name="nginx.conf" dev="vda1" ino=91238 scontext=system_u:system_r:httpd_t:s0 tcontext=system_u:object_r:var_t:s0 tclass=file permissive=0
+	#* type=SYSCALL msg=audit(1584932988.873:915): arch=c000003e syscall=257 success=no exit=-13 a0=ffffff9c a1=55e06ce27530 a2=0 a3=0 items=0 ppid=1 pid=2456 auid=4294967295 uid=0 gid=0 euid=0 suid=0 fsuid=0 egid=0 sgid=0 fsgid=0 tty=(none) ses=4294967295 comm="nginx" exe="/usr/sbin/nginx" subj=system_u:system_r:httpd_t:s0 key=(null)ARCH=x86_64 SYSCALL=openat AUID="unset" UID="root" GID="root" EUID="root" SUID="root" FSUID="root" EGID="root" SGID="root" FSGID="root"
+	sudo tee $dir/nginx-read-conf.te >/dev/null <<-"EOF"
+	module nginx-read-conf 1.0;
+
+	require {
+		type httpd_t;
+		type var_t;
+		class file read;
+	}
+
+	#============= httpd_t ==============
+	allow httpd_t var_t:file read;
+	EOF
+
+
+	echo Add policy to address: SELinux is preventing /usr/lib/systemd/systemd from execute access on the file gunicorn.
+	#* # ausearch -c '(gunicorn)' -x "/systemd" --raw | audit2allow -M systemd-gunicorn
+	#* type=AVC msg=audit(1584752135.668:1479): avc:  denied  { execute } for  pid=7214 comm="(gunicorn)" name="gunicorn" dev="vda1" ino=37938634 scontext=system_u:system_r:init_t:s0 tcontext=system_u:object_r:var_t:s0 tclass=file permissive=0
+	sudo tee $dir/systemd-execute-gunicorn.te >/dev/null <<-"EOF"
+	module systemd-execute-gunicorn 1.0;
+
+	require {
+		type init_t;
+		type httpd_sys_content_t;
+		class file execute;
+	}
+
+	#============= init_t ==============
+	allow init_t httpd_sys_content_t:file execute;
+	EOF
+
+
+	echo Add policy to address: SELinux is preventing /usr/lib/systemd/systemd from 'read, open' accesses on the file /var/www/$domain/venv/bin/gunicorn
+	#* Command to generate policy from audit log: sudo ausearch -c '(gunicorn)' -x "/systemd" --raw | grep "type=AVC" | tail -1 | audit2allow -m systemd-access-gunicorn
+	#* # For reference, the record in audit log from which we generate the policy file: t
+	#* type=AVC msg=audit(1584752866.780:1619): avc:  denied  { read open } for  pid=7357 comm="(gunicorn)" path="/var/www/$domain/venv/bin/gunicorn" dev="vda1" ino=37938634 scontext=system_u:system_r:init_t:s0 tcontext=system_u:object_r:httpd_sys_content_t:s0 tclass=file permissive=0
+	sudo tee $dir/systemd-read_open-gunicorn.te >/dev/null <<-"EOF"
+	module systemd-read_open-gunicorn 1.0;
+
+	require {
+		type httpd_sys_content_t;
+		type init_t;
+		class file { open read };
+	}
+
+	#============= init_t ==============
+	allow init_t httpd_sys_content_t:file { open read };
+	EOF
+
+
+	echo Add policy to address: SELinux is preventing /usr/lib/systemd/systemd from execute_no_trans access on the file /var/www/$domain/venv/bin/gunicorn
+	#* # For reference, the record in audit log from which we generate the policy file: t
+	#* type=AVC msg=audit(1584755640.162:1901): avc:  denied  { execute_no_trans } for  pid=7861 comm="(gunicorn)" path="/var/www/$domain/venv/bin/gunicorn" dev="vda1" ino=37938634 scontext=system_u:system_r:init_t:s0 tcontext=system_u:object_r:httpd_sys_content_t:s0 tclass=file permissive=0
+	sudo tee $dir/systemd-execute_no_trans-gunicorn.te >/dev/null <<-"EOF"
+	module systemd-execute_no_trans-gunicorn 1.0;
+
+	require {
+		type httpd_sys_content_t;
+		type init_t;
+		class file execute_no_trans;
+	}
+
+	#============= init_t ==============
+	allow init_t httpd_sys_content_t:file execute_no_trans;
+	EOF
+
+
+	echo "Add policy to address: SELinux is preventing /usr/local/bin/python$python_version from ioctl access on the file /var/www/$domain/venv/bin/gunicorn"
+	sudo tee $dir/python-ioctl-gunicorn.te >/dev/null <<-"EOF"
+	module python-ioctl-gunicorn 1.0;
+
+	require {
+		type init_t;
+		type httpd_sys_content_t;
+		class file ioctl;
+	}
+
+	#============= init_t ==============
+	allow init_t httpd_sys_content_t:file ioctl;
+	EOF
+
+
+	echo "Add policy to address: SELinux is preventing systemd from getattr access on the file /var/www/$domain/venv/bin/gunicorn."
+	#* type=AVC msg=audit(1584906659.331:1033): avc:  denied  { getattr } for  pid=7310 comm="gunicorn" path="/var/www/$domain/venv/bin/gunicorn" dev="vda1" ino=17129162 scontext=system_u:system_r:init_t:s0 tcontext=system_u:object_r:httpd_sys_content_t:s0 tclass=file permissive=0
+	#* type=AVC msg=audit(1584933009.783:940): avc:  denied  { getattr } for  pid=1 comm="systemd" path="/var/www/$domain/venv/bin/gunicorn" dev="vda1" ino=17135168 scontext=system_u:system_r:init_t:s0 tcontext=system_u:object_r:httpd_sys_content_t:s0 tclass=file permissive=0
+	#* ausearch -c 'systemd' --raw | audit2allow -M my-systemd
+	sudo tee $dir/systemd-getattr-gunicorn.te >/dev/null <<-"EOF"
+	module systemd-getattr-gunicorn 1.0;
+
+	require {
+		type httpd_sys_content_t;
+		type init_t;
+		class file getattr;
+	}
+
+	#============= init_t ==============
+	allow init_t httpd_sys_content_t:file getattr;
+	EOF
+
+
+	echo "Add policy to address: SELinux is preventing /usr/local/bin/python$python_version from setattr access on the file $domain.log"
+	#* type=AVC msg=audit(1584923828.433:2548): avc:  denied  { setattr } for  pid=8117 comm="gunicorn" name="$domain.log" dev="vda1" ino=37944129 scontext=system_u:system_r:init_t:s0 tcontext=system_u:object_r:var_log_t:s0 tclass=file permissive=0
+	#* ausearch -c 'gunicorn' --raw | audit2allow -M my-gunicorn
+	sudo tee $dir/gunicorn-setattr-log.te >/dev/null <<-"EOF"
+	module gunicorn-setattr-log 1.0;
+
+	require {
+		type var_log_t;
+		type init_t;
+		class file setattr;
+	}
+
+	#============= init_t ==============
+	allow init_t var_log_t:file setattr;
+	EOF
+
+
+	echo "Set SE Bool value to allow Gunicorn to create logs in /var/log"
+	#* # Allow create vbox modules during startup new kernel.
+	sudo setsebool -P use_virtualbox 1
+
+
+	echo "Add policy to address: SELinux is preventing /usr/local/bin/python$python_version from create access on the file wsgi.cpython-$(tr -d . <<< $python_version).pyc.140034445445552"
+	#* type=AVC msg=audit(1584923828.570:2554): avc:  denied  { create } for  pid=8123 comm="gunicorn" name="wsgi.cpython-38.pyc.140034445445552" scontext=system_u:system_r:init_t:s0 tcontext=system_u:object_r:httpd_sys_content_t:s0 tclass=file permissive=0
+	#* ausearch -c 'gunicorn' --raw | audit2allow -M my-gunicorn
+	sudo tee $dir/gunicorn-create-wsgi.pyc.te >/dev/null <<-"EOF"
+	module gunicorn-create-wsgi.pyc 1.0;
+
+	require {
+		type init_t;
+		type httpd_sys_content_t;
+		class file create;
+	}
+
+	#============= init_t ==============
+	allow init_t httpd_sys_content_t:file create;
+	EOF
+
+
+	echo Add policy to address: SELinux is preventing gunicorn from write access on the file /var/www/$domain/server/config/__pycache__/wsgi.cpython-$(tr -d . <<< $python_version).pyc.140527366850992
+	# type=AVC msg=audit(1584763699.146:16465): avc:  denied  { write } for  pid=16592 comm="gunicorn" path="/var/www/$domain/server/config/__pycache__/wsgi.cpython-38.pyc.140527366850992" dev="vda1" ino=41998449 scontext=system_u:system_r:init_t:s0 tcontext=system_u:object_r:httpd_sys_content_t:s0 tclass=file permissive=0
+	sudo tee $dir/gunicorn-write-pyc.te >/dev/null <<-"EOF"
+	module gunicorn-write-pyc 1.0;
+
+	require {
+		type init_t;
+		type httpd_sys_content_t;
+		class file write;
+	}
+
+	#============= init_t ==============
+	allow init_t httpd_sys_content_t:file write;
+	EOF
+
+
+	echo "Add policy to address: SELinux is preventing /usr/local/bin/python$python_version from (rename|unlink) access on the file wsgi.cpython-$(tr -d . <<< $python_version).pyc.140012630993328"
+	#* type=AVC msg=audit(1584888468.748:76): avc:  denied  { rename } for  pid=1493 comm="gunicorn" name="wsgi.cpython-38.pyc.140012630993328" dev="vda1" ino=37948170 scontext=system_u:system_r:init_t:s0 tcontext=system_u:object_r:httpd_sys_content_t:s0 tclass=file permissive=0
+	sudo tee $dir/python-rename_unlink.te >/dev/null <<-"EOF"
+	module python-rename_unlink 1.0;
+
+	require {
+		type httpd_sys_content_t;
+		type init_t;
+		class file { rename unlink };
+	}
+
+	#============= init_t ==============
+	allow init_t httpd_sys_content_t:file { rename unlink };
+	EOF
+
+
+	echo Add policy to address: SELinux is preventing /usr/sbin/nginx from write access on the sock_file $domain-gunicorn.sock
+	#* type=AVC msg=audit(1584766050.173:17003): avc:  denied  { write } for  pid=17273 comm="nginx" name="$domain-gunicorn.sock" dev="tmpfs" ino=472451 scontext=system_u:system_r:httpd_t:s0 tcontext=system_u:object_r:var_run_t:s0 tclass=sock_file permissive=0
+	#* sudo ausearch -c 'nginx' --raw | grep AVC | tail -1 | audit2allow -m yo
+	sudo tee $dir/nginx-write-sock.te >/dev/null <<-"EOF"
+	module nginx-write-sock 1.0;
+
+	require {
+		type var_run_t;
+		type httpd_t;
+		class sock_file write;
+	}
+
+	#============= httpd_t ==============
+	allow httpd_t var_run_t:sock_file write;
+	EOF
+
+
+	echo "Add policy to address: SELinux is preventing /usr/local/bin/python$python_version from (lock|setattr|unlink) access on the file /var/www/$domain/server/db.sqlite3"
+	#* type=AVC msg=audit(1584769382.246:1581): avc:  denied  { lock } for  pid=7583 comm="gunicorn" path="/var/www/$domain/server/db.sqlite3" dev="vda1" ino=21233496 scontext=system_u:system_r:init_t:s0 tcontext=unconfined_u:object_r:httpd_sys_content_t:s0 tclass=file permissive=0
+	#* type=AVC msg=audit(1584772711.038:3770): avc:  denied  { setattr } for  pid=10582 comm="gunicorn" name="db.sqlite3-journal" dev="vda1" ino=42049735 scontext=system_u:system_r:init_t:s0 tcontext=system_u:object_r:httpd_sys_content_t:s0 tclass=file permissive=0
+	#* type=AVC msg=audit(1584772711.041:3771): avc:  denied  { unlink } for  pid=10582 comm="gunicorn" name="db.sqlite3-journal" dev="vda1" ino=42049735 scontext=system_u:system_r:init_t:s0 tcontext=system_u:object_r:httpd_sys_content_t:s0 tclass=file permissive=0
+
+	sudo tee $dir/python-sqlite3.te >/dev/null <<-"EOF"
+	module python-sqlite3 1.0;
+
+	require {
+		type httpd_sys_content_t;
+		type init_t;
+		class file { lock setattr unlink };
+	}
+
+	#============= init_t ==============
+
+	allow init_t httpd_sys_content_t:file lock;
+	allow init_t httpd_sys_content_t:file { setattr unlink };
+	EOF
+
+}
+echo "INFO:  Writing SELinux policy files provided by audit2allow..."
+add_policy_files_generated_from_audit2allow
+
+
+cd $dir
+
+
+# Compile policies
+make -f /usr/share/selinux/devel/Makefile
+#* Alternative way to compile, one module at a time: https://relativkreativ.at/articles/how-to-compile-a-selinux-policy-package
+#checkmodule -M -m -o $module_name.mod $module_name.te
+#semodule_package -o $module_name.pp -m $module_name.mod
+
+
+# Load policies
+sudo semodule -i $dir/*.pp
+
+
+cd - >/dev/null
+
+
+# Set file context for
+## Reference: https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/7/html/selinux_users_and_administrators_guide/sect-security-enhanced_linux-working_with_selinux-selinux_contexts_labeling_files
+#sudo semanage fcontext -a -t httpd_var_run_t /var/run
+
+
+touch $dir/DONE
+
+echo "INFO: Finished SELinux policy installations at $(date)"
+

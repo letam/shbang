@@ -66,6 +66,7 @@ sbin_script_files=(
 	os-name		# Return OS name of current system
 	chdirgroup	# Recursively update group owner of directory
 	randpw		# Generate a random password
+	cp-app-files	# Copy app files to remote server
 )
 for file in "${sbin_script_files[@]}"; do
 	script=$(<"./sbin/$file")

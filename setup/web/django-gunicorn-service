@@ -1,0 +1,106 @@
+#!/usr/bin/env bash
+
+# Set up SystemD-managed Gunicorn server for Python/Django web app
+# Reference: https://docs.gunicorn.org/en/latest/deploy.html
+
+[[ $(id -u) != 0 ]] && echo "Error: Must be run as sudo/root." && exit 1
+
+[[ $# != 2 ]] && echo "Usage: $0 DOMAIN DIRECTORY" && exit 1
+
+domain=$1 ; shift
+project_dir=$1 ; shift
+
+
+bind_path="/run/$domain-gunicorn.sock"
+
+
+recommended_worker_count() {
+	num_cores_per_socket=$(
+		lscpu | grep -m 1 "Core(s) per socket" | cut -f2 -d":" | tr -d " "
+	)
+	num_sockets=$(
+		lscpu | grep -m 1 "Socket(s)" | cut -f2 -d":" | tr -d " "
+	)
+	num_cores=$(( num_cores_per_socket * num_sockets))
+	echo $(( 2 * num_cores + 1))
+}
+workers=$(recommended_worker_count)
+
+
+configure_systemd_service() {
+	# Add system user named gunicorn to run process and write logs
+	if ! id gunicorn &>/dev/null; then
+		echo "Add system user 'gunicorn' to run SystemD service"
+		sudo useradd --system --shell /bin/false gunicorn
+	fi
+	if [[ ! -d /var/log/gunicorn ]]; then
+		mkdir -v /var/log/gunicorn
+		chown -v gunicorn /var/log/gunicorn
+		chdirgroup /var/log/gunicorn adm
+	fi
+
+	# Add SystemD configuration for service executing Gunicorn server
+	cat > "/etc/systemd/system/$domain-gunicorn.service" <<EOF
+[Unit]
+Description=gunicorn daemon for $domain
+Requires=$domain-gunicorn.socket
+After=network.target
+
+[Service]
+Type=notify
+# the specific user that our service will run as
+User=gunicorn
+Group=adm
+# another option for an even more restricted service is
+# DynamicUser=yes
+# see http://0pointer.net/blog/dynamic-users-with-systemd.html
+#RuntimeDirectory=$domain-gunicorn
+#WorkingDirectory=$project_dir
+ExecStart=$project_dir/venv/bin/gunicorn \\
+	--chdir /var/www/$domain/server \\
+	-b unix:$bind_path \\
+	-w $workers \\
+	-e DJANGO_SETTINGS_MODULE="config.settings_production" \\
+	--capture-output \\
+	--log-file /var/log/gunicorn/$domain.log \\
+	config.wsgi
+ExecReload=/bin/kill -s HUP \$MAINPID
+KillMode=mixed
+TimeoutStopSec=5
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
+EOF
+}
+
+
+configure_systemd_socket() {
+	# Add SystemD configuration for socket connecting to Gunicorn service
+	cat > "/etc/systemd/system/$domain-gunicorn.socket" <<-EOF
+	[Unit]
+	Description=gunicorn socket for $domain
+
+	[Socket]
+	ListenStream=$bind_path
+	# Our service won't need permissions for the socket, since it
+	# inherits the file descriptor by socket activation
+	# only the nginx daemon will need access to the socket
+	User=www-data
+	# Optionally restrict the socket permissions even more.
+	# Mode=600
+
+	[Install]
+	WantedBy=sockets.target
+	EOF
+}
+
+
+main() {
+	configure_systemd_service
+	configure_systemd_socket
+	sudo systemctl enable --now "$domain-gunicorn.socket"
+}
+
+main
+
