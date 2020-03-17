@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+
+# Install Perl code interpreter
+# Perl is awesome for regex replacements in files
+
+
+[[ $(id -u) != 0 ]] && echo "Error: Must be run as sudo/root." && exit 1
+
+
+sudo dnf install -y perl
+
