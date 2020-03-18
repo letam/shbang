@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+
+# Install Lets Encrypt SSL Certbot for HTTPS Certificates
+
+
+[[ $(id -u) != 0 ]] && echo "Error: Must be run as sudo/root." && exit 1
+
+
+is_centos() {
+	[[ -f /etc/centos-release ]]
+}
+is_ubuntu() {
+	[[ $(uname -a) =~ Ubuntu ]]
+}
+
+
+if ! command -v certbot >/dev/null; then
+	if is_centos; then
+		# Reference: https://certbot.eff.org/lets-encrypt/centosrhel8-nginx.html
+		curl -LO https://dl.eff.org/certbot-auto
+		sudo mv certbot-auto /usr/local/bin/certbot-auto
+		sudo chown root /usr/local/bin/certbot-auto
+		sudo chmod 0755 /usr/local/bin/certbot-auto
+		if command -v python3 >/dev/null; then
+			sudo tee /usr/bin/certbot >/dev/null <<-"EOF"
+			#!/bin/sh
+
+			/usr/local/bin/certbot-auto --no-bootstrap $@
+			EOF
+			sudo chmod +x /usr/bin/certbot
+			certbot --install-only
+		else
+			sudo ln -vs /usr/local/bin/certbot-auto /usr/bin/certbot
+			echo y | certbot --install-only
+		fi
+		echo "Installed: $(certbot --version)"
+		if ! grep -q "certbot-auto renew" /etc/crontab; then
+			echo "Adding semi-daily cronjob to renew SSL certificates..."
+			sudo bak /etc/crontab
+			echo "0 0,12 * * * root python3 -c 'import random; import time; time.sleep(random.random() * 3600)' && certbot renew -q" \
+				| sudo tee -a /etc/crontab >/dev/null
+		fi
+	elif is_ubuntu; then
+		sudo add-apt-repository -y ppa:certbot/certbot
+		sudo apt install -y python-certbot-nginx
+	fi
+fi
+
