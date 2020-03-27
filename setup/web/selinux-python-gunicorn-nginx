@@ -297,6 +297,11 @@ add_policy_files_generated_from_audit2allow() {
 	allow init_t httpd_sys_content_t:file { setattr unlink };
 	EOF
 
+	echo "Set SE bool to address: SELinux is preventing gunicorn from map access on the file /var/www/$domain/venv/lib/python$python_version/site-packages/meinheld/server.cpython-$(tr -d "." <<< $python_version)-x86_64-linux-gnu.so"
+	#* If you want to allow any process to mmap any file on system with attribute file_type.
+	#* (Needed for Meinheld server)
+	sudo setsebool -P domain_can_mmap_files 1
+
 }
 echo "INFO:  Writing SELinux policy files provided by audit2allow..."
 add_policy_files_generated_from_audit2allow

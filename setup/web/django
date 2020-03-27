@@ -83,12 +83,13 @@ cd $project_dir
 python -m venv venv
 source venv/bin/activate
 pip install --upgrade pip setuptools
-pip install Django gunicorn
+pip install Django gunicorn meinheld
 
 ## Create requirements.txt file
 pip list | grep -E "(\
 Django |\
-gunicorn \
+gunicorn |\
+meinheld \
 )" | tr -s " " | sed "s/ /==/" > requirements.txt
 
 ## Create Django project

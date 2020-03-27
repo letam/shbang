@@ -57,6 +57,7 @@ ExecStart=$project_dir/venv/bin/gunicorn \\
 	--chdir /var/www/$domain/server \\
 	-b unix:$bind_path \\
 	-w $workers \\
+	-k egg:meinheld#gunicorn_worker \\
 	-e DJANGO_SETTINGS_MODULE="config.settings_production" \\
 	--capture-output \\
 	--log-file /var/log/gunicorn/$domain.log \\
