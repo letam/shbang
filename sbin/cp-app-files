@@ -9,12 +9,49 @@ src="$1" ; shift
 dest="$1" ; shift
 
 
-## Create directory if it does not exist
+## Extract values for remote connection and file location from $dest argument
 if [[ $dest =~ ":" ]]; then
 	remote=$(echo $dest | cut -f 1 -d :)
 	dir=$(echo $dest | cut -f 2 -d :)
-	ssh $remote "[[ ! -d $dir ]] && mkdir -vp $dir"
 else
+	remote=$dest
+fi
+[[ $dir = "" ]] && dir="~"
+
+
+## Install rsync if not found
+ssh $remote "
+if ! command -v rsync >/dev/null; then
+	log_dir=/var/log/setup/install
+	[[ ! -d \$log_dir ]] && sudo mkdir -vp \$log_dir
+	log=\$log_dir/rsync
+	echo \"INFO [\$(date)]: Installing rsync...\" | sudo tee \$log
+	if command -v dnf >/dev/null; then
+		install_rsync() {
+			sudo dnf install -y rsync
+		}
+	elif command -v apt >/dev/null; then
+		install_rsync() {
+			sudo apt install -y rsync
+		}
+	else
+		>&2 echo \"Platform not supported.\"
+		exit 1
+	fi
+	install_rsync 2>&1 | sudo tee -a \$log
+	echo \"INFO [\$(date)]: Done!\" | sudo tee -a \$log
+fi
+"
+
+## Create directory if it does not exist
+if [[ $dest =~ ":" ]]; then
+	echo "INFO [$(date)]: Will copy files to remote server '$remote'."
+	ssh $remote "
+	[[ ! -d $dir ]] && sudo mkdir -vp $dir
+	[[ \$(stat -c %U $dir) != \$USER ]] && sudo chown -v \$USER:\$USER $dir
+	"
+else
+	echo "INFO [$(date)]: Will copy files to localhost."
 	[[ ! -d $dest ]] && mkdir -vp $dest
 fi
 
@@ -24,4 +61,6 @@ rsync -vh -azP \
     --exclude=.env --exclude=venv --exclude=^bin --exclude=tmp --exclude=.git \
     --exclude=.vscode --exclude=*.sublime-* --exclude=.DS_Store \
     "$src" "$dest"
+
+echo "INFO [$(date)]: Done!"
 
