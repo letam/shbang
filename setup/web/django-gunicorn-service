@@ -29,15 +29,12 @@ workers=$(recommended_worker_count)
 
 configure_systemd_service() {
 	# Add system user named gunicorn to run process and write logs
-	if ! id gunicorn &>/dev/null; then
-		echo "Add system user 'gunicorn' to run SystemD service"
-		sudo useradd --system --shell /bin/false gunicorn
-	fi
 	if [[ ! -d /var/log/gunicorn ]]; then
 		mkdir -v /var/log/gunicorn
-		chown -v gunicorn /var/log/gunicorn
 		chdirgroup /var/log/gunicorn adm
 	fi
+	touch /var/log/gunicorn/$domain.log
+	chown -v $SUDO_USER /var/log/gunicorn/$domain.log
 
 	# Add SystemD configuration for service executing Gunicorn server
 	cat > "/etc/systemd/system/$domain-gunicorn.service" <<EOF
@@ -49,7 +46,7 @@ After=network.target
 [Service]
 Type=notify
 # the specific user that our service will run as
-User=gunicorn
+User=$SUDO_USER
 Group=adm
 # another option for an even more restricted service is
 # DynamicUser=yes

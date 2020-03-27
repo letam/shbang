@@ -188,9 +188,27 @@ add_policy_files_generated_from_audit2allow() {
 	EOF
 
 
-	echo "Set SE Bool value to allow Gunicorn to create logs in /var/log"
-	#* # Allow create vbox modules during startup new kernel.
-	sudo setsebool -P use_virtualbox 1
+	#echo "Set SE Bool value to allow Gunicorn to create logs in /var/log"
+	##* # Allow create vbox modules during startup new kernel.
+	#sudo setsebool -P use_virtualbox 1
+
+
+	echo "Add policy to address: SELinux is preventing /usr/local/bin/python$python_version from 'read, append' accesses on the file $domain.log"
+	#* type=AVC msg=audit(1585192680.680:2492): avc:  denied  { read append } for  pid=9023 comm="gunicorn" name="api.blar.app.log" dev="vda1" ino=17123207 scontext=system_u:system_r:init_t:s0 tcontext=system_u:object_r:cron_log_t:s0 tclass=file permissive=0
+	#* type=SYSCALL msg=audit(1585192680.680:2492): arch=x86_64 syscall=openat success=no exit=EACCES a0=ffffff9c a1=7ff857e34e10 a2=80442 a3=1b6 items=0 ppid=1 pid=9023 auid=4294967295 uid=1001 gid=4 euid=1001 suid=1001 fsuid=1001 egid=4 sgid=4 fsgid=4 tty=(none) ses=4294967295 comm=gunicorn exe=/usr/local/bin/python3.8 subj=system_u:system_r:init_t:s0 key=(null)
+	#* ausearch -c 'gunicorn' --raw | audit2allow -M my-gunicorn
+	sudo tee $dir/python-read-access-log >/dev/null <<-"EOF"
+	module python-read-access-log 1.0;
+
+	require {
+			type init_t;
+			type cron_log_t;
+			class file { append read };
+	}
+
+	#============= init_t ==============
+	allow init_t cron_log_t:file { append read };
+	EOF
 
 
 	echo "Add policy to address: SELinux is preventing /usr/local/bin/python$python_version from create access on the file wsgi.cpython-$(tr -d . <<< $python_version).pyc.140034445445552"

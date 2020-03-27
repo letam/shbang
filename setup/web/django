@@ -200,12 +200,15 @@ echo "Not found" > "$html_dir/404.html"
 #sudo ln -s "$html_dir/404.html" "$html_dir/40x.html"
 
 
+## Set owner of $project_dir
+chown -R $SUDO_USER:adm $project_dir
+
+
 # Gunicorn Config
 $(dirname $0)/django-gunicorn-service $domain $project_dir
 
-
-## Set owner of $project_dir
-chown -R gunicorn:adm $project_dir
+## Restore SELinux context of gunicorn log
+sudo /sbin/restorecon -v /var/log/gunicorn/$domain.log
 
 
 # Nginx Config
