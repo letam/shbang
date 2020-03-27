@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+
+# Run Python script on remote Django app server
+
+[[ $# != 3 ]] && echo "Usage: $0 DEST DOMAIN COMMAND" && exit 1
+
+dest=$1 ; shift
+domain=$1 ; shift
+command=$1 ; shift
+
+
+ssh $dest "
+/var/www/$domain/venv/bin/python -c '
+import os,sys;
+sys.path.append(\"/var/www/$domain/server\");
+os.environ.setdefault(\"DJANGO_SETTINGS_MODULE\", \"config.settings_production\");
+import django;
+django.setup();
+$command
+'
+"
