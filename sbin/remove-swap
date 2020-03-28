@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+
+# Remove a swap space on system
+
+[[ $(id -u) != 0 ]] && >&2 echo "Error: Must be run as sudo/root." && exit 1
+
+
+## Get last swap file listed
+swap_file=$(cat /proc/swaps | tail -n +2 | tail -1 | cut -f 1 -d " ")
+if [[ $swap_file = "" ]]; then
+	echo "No swap file found."
+	exit
+fi
+
+## Turn off
+sudo swapoff $swap_file
+
+## Remove from /etc/fstab
+sudo cp -p /etc/fstab /etc/fstab.bak.$(date -u +%Y-%m-%d-%H%M%S)
+sudo sed -i "\|$swap_file .*swap|d" /etc/fstab
+
+## Reload SystemD daemon configs
+sudo systemctl daemon-reload
+
