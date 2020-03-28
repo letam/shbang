@@ -69,9 +69,18 @@ sbin_script_files=(
 	cp-app-files	# Copy app files to remote server
 	remove-swap	# Remove swap space from system
 	private-ip	# Return private IP address of system (if it exists)
+	firewall-add-rule	# Allow connection to port from IP address
+	firewall-remove-rule	# Remove rule for connection to port from IP address
 )
+IFS_ORIGINAL=$IFS
 for file in "${sbin_script_files[@]}"; do
 	script=$(<"./sbin/$file")
+	#### Hack to ensure that single quote (') characters can be transferred successfully
+	if [[ $file =~ firewall ]]; then
+		IFS=""
+		script=$(echo $script | sed "s%'%SINGLE_QUOTE%g")
+		IFS=$IFS_ORIGINAL
+	fi
 	command+="
 echo '$script' | sudo tee /usr/local/sbin/$file >/dev/null
 sudo chmod +x /usr/local/sbin/$file
@@ -79,6 +88,11 @@ if test -f /etc/centos-release; then
 	sudo ln -s /usr/local/sbin/$file /usr/sbin
 fi
 "
+	if [[ $file =~ firewall ]]; then
+		command+="
+sudo sed -i \"s%SINGLE_QUOTE%'%g\" /usr/local/sbin/$file
+"
+	fi
 done
 
 

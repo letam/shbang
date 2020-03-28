@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+
+# Add rule to firewall to allow connections to a port from an IPv4 address
+
+[[ $(id -u) != 0 ]] && >&2 echo "Error: Must be run as sudo/root." && exit 1
+
+[[ $# != 2 ]] && >&2 echo "Usage: $0 PORT IP_ADDRESS" && exit 1
+
+port=$1 ; shift
+ip_address=$1 ; shift
+
+
+## Set firewall rule to allow connections to $port from $ip_address
+zone=$(firewall-cmd --get-default-zone)
+backup_conf=$(sudo bak /etc/firewalld/zones/$zone.xml | sed -E "s/.* -> '(.*)'/\1/")
+sudo firewall-cmd --permanent --zone=$zone --add-rich-rule="
+	rule family=ipv4
+	source address=$ip_address
+	port protocol=tcp port=$port accept" >/dev/null
+if [[ $(diff /etc/firewalld/zones/$zone.xml $backup_conf) = "" ]]; then
+	rm $backup_conf
+	exit 1
+fi
+sudo firewall-cmd --reload
