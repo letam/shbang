@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+
+# Return private IP address (CIDR Notation) of server
+
+if [[ $1 = "" ]]; then
+	ip_addr_prefix=192.168
+else
+	ip_addr_prefix=$1
+fi
+ip a | grep $ip_addr_prefix | head -1 | tr -s " " | cut -f 3 -d " "
+

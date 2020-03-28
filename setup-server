@@ -68,6 +68,7 @@ sbin_script_files=(
 	randpw		# Generate a random password
 	cp-app-files	# Copy app files to remote server
 	remove-swap	# Remove swap space from system
+	private-ip	# Return private IP address of system (if it exists)
 )
 for file in "${sbin_script_files[@]}"; do
 	script=$(<"./sbin/$file")
