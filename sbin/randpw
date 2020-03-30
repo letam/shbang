@@ -1,3 +1,62 @@
+#!/usr/bin/env bash
+
+# Generate a cryptographically strong random string, which can be used as a password
+# (Uses either Python or PHP, based on what is installed.)
+
+length=$1
+[[ $length = "" ]] && length=16
+
+special_chars="!@#$%^&*()"
+
+
+# Generate password
+
+if command -v python3 >/dev/null && \
+	[[ $(python3 -V 2>&1 | cut -f2 -d" " | cut -f 1,2 -d.) > "3.5" ]]
+then
+	# Reference: https://docs.python.org/3/library/secrets.html
+	python3 -c "
+import string
+import secrets
+
+alphanumeric = string.ascii_letters + string.digits
+special_chars = '$special_chars'
+keyspace = alphanumeric + special_chars
+
+
+def ensure_string_has_one_of_every_char(s):
+	'''Return a version of string s that includes one of every type of char of
+		(number, lower alpha, upper alpha, special)
+	'''
+	char_sets = (
+		special_chars,
+		string.digits,
+		string.ascii_lowercase,
+		string.ascii_uppercase,
+	)
+	s_list = list(s)
+	for i, char_set in enumerate(char_sets):
+		if i == len(s_list):
+			s_list.append(secrets.choice(char_set))
+		else:
+			s_list[i] = secrets.choice(char_set)
+	# shuffle the newly placed characters into the sequence
+	for i in range(len(char_sets)):
+		rand_i = secrets.randbelow(len(s_list))
+		s_list[i], s_list[rand_i] = s_list[rand_i], s_list[i]
+	return ''.join(s_list)
+
+
+password = ''.join(secrets.choice(keyspace) for i in range($length))
+password = ensure_string_has_one_of_every_char(password)
+print(password, end='', flush=True)
+
+"
+	exit
+
+elif command -v php >/dev/null && php -m | grep -q mbstring; then
+	tmp_file=/tmp/randpw.php
+	cat > $tmp_file <<"EOF"
 #!/usr/bin/env php
 <?php
 /**
@@ -68,4 +127,15 @@ if (PHP_SAPI === "cli") {
 	$length = $argc > 1 ? $argv[1] : 16;
 	echo random_str($length) . PHP_EOL;
 }
+EOF
+	chmod +x $tmp_file
+	$tmp_file $@
+	exit
 
+fi
+
+>&2 echo "Error: This script requires one of the following interpreters:
+- Python3.6+
+- PHP with mbstring library"
+
+exit 1

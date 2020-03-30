@@ -76,7 +76,7 @@ IFS_ORIGINAL=$IFS
 for file in "${sbin_script_files[@]}"; do
 	script=$(<"./sbin/$file")
 	#### Hack to ensure that single quote (') characters can be transferred successfully
-	if [[ $file =~ firewall ]]; then
+	if [[ $file =~ randpw|firewall ]]; then
 		IFS=""
 		script=$(echo $script | sed "s%'%SINGLE_QUOTE%g")
 		IFS=$IFS_ORIGINAL
@@ -88,7 +88,7 @@ if test -f /etc/centos-release; then
 	sudo ln -s /usr/local/sbin/$file /usr/sbin
 fi
 "
-	if [[ $file =~ firewall ]]; then
+	if [[ $file =~ randpw|firewall ]]; then
 		command+="
 sudo sed -i \"s%SINGLE_QUOTE%'%g\" /usr/local/sbin/$file
 "
