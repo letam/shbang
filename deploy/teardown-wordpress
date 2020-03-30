@@ -1,0 +1,82 @@
+#!/usr/bin/env bash
+
+# Remotely teardown Wordpress website, along with its MySQL database and user
+
+[[ $# != 3 ]] && >&2 echo "Usage: $0 WEBSITE_NAME WP_DEST DB_DEST" && exit 1
+
+website_name="$1" ; shift
+wp_dest="$1" ; shift
+db_dest="$1" ; shift
+
+mysql_port=3306
+
+echo "INFO [$(date)]: Begin teardown of Wordpress website and its MySQL database..."
+
+## Get private IP address values of DB server and Wordpress server
+
+wordpress_private_ip=$(ssh $wp_dest "private-ip" | cut -f1 -d/)
+if [[ $wordpress_private_ip = "" ]]; then
+	>&2 echo "Error: Cannot retrieve private IP of Wordpress server."
+	exit 1
+fi
+mysqld_private_ip=$(ssh $db_dest "private-ip" | cut -f1 -d/)
+if [[ $mysqld_private_ip = "" ]]; then
+	>&2 echo "Error: Cannot retrieve private IP of MySQL server."
+	exit 1
+fi
+
+
+### Assemble names
+sql_friendly_name=$(echo $website_name | tr "." "_")
+db_name="wp_$sql_friendly_name"
+db_user="$db_name"
+
+## Drop database on MySQL server
+echo "INFO: Dropping database on MySQL server..."
+ssh $db_dest "
+	mysql_root_pw=\$(cat ~/.credentials/mysql_root_pw)
+
+	mysql -uroot -p\$mysql_root_pw -e \"
+		-- REVOKE ALL PRIVILEGES ON $db_name.* FROM '$db_user'@'$wordpress_private_ip';
+		-- FLUSH PRIVILEGES;
+		DROP USER IF EXISTS '$db_user'@'$wordpress_private_ip';
+		DROP DATABASE IF EXISTS $db_name;
+		\" 2>/tmp/mysql-error
+	[[ \$? != 0 ]] && >&2 cat /tmp/mysql-error && exit 1
+
+	### Confirm database is gone
+	if mysql -uroot -p\$mysql_root_pw -Bse 'SHOW SCHEMAS;' \
+		2>/dev/null | grep -q $db_name
+	then
+		>&2 echo 'Error: Database '$db_name' still exists.'
+	fi
+	echo 'INFO: Confirmed that database '$db_name' does not exist.'
+
+	### Confirm that user is gone
+	if mysql -uroot -p\$mysql_root_pw -Bse 'SELECT Host, User FROM mysql.user;' \
+		2>/dev/null | grep $db_user | grep -q $wordpress_private_ip
+	then
+		>&2 echo 'Error: User still exists.'
+	fi
+	echo 'INFO: Confirmed that user '$db_user'@'$wordpress_private_ip' does not exist.'
+	"
+echo "Success!"
+
+
+#* Do not remove firewall rule for this Wordpress-MySQL port connection, in case there are other active Wordpress connections
+#echo "INFO: Remove MySQL client connections from private IP address of Wordpress server"
+#ssh $db_dest "sudo firewall-remove-rule $mysql_port $wordpress_private_ip"
+
+
+# Remove traces of Wordpress site on Wordpress server
+ssh $wp_dest "
+	if sudo rm /etc/nginx/sites-enabled/$website_name; then
+		sudo systemctl reload nginx
+	fi
+
+	sudo rm ~/.credentials/mysql/$db_name
+	sudo rm -rf /var/www/$website_name
+	"
+
+echo "INFO [$(date)]: Done! 💥"
+

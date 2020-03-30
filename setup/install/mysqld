@@ -80,24 +80,40 @@ expect eof
 EOF
 
 
-### Backup /var/lib/mysql/mysqld-auto.cnf
+### Password settings
+
+#### Backup /var/lib/mysql/mysqld-auto.cnf file
 [[ -f /var/lib/mysql/mysqld-auto.cnf ]] && sudo bak /var/lib/mysql/mysqld-auto.cnf
 
-### Set minimum password length
+#### Set minimum password length
 password_length=16
 echo "Set minimum password length to $password_length..."
 mysql -uroot -p$mysql_root_pw -e "
 	SET PERSIST validate_password.length = $password_length;
-	"
+	" 2>/dev/null
 
+#### Do not require multiple character types in passwords
+validate_password_policy=$(
+	mysql -uroot -p$mysql_root_pw -Bse " SELECT @@GLOBAL.validate_password.policy;" \
+		2>/dev/null
+	)
+if [[ $validate_password_policy != LOW ]]; then
+	mysql -uroot -p$mysql_root_pw -e "SET PERSIST validate_password.policy = 'LOW';" 2>/dev/null
+	if [[ $? = 0 ]]; then
+		echo "Set validate_password.policy = 'LOW'"
+	else
+		>&2 echo "Error: Did not successfully set validate_password.policy."
+	fi
+fi
 
-### Notes for security settings
-
-#### Do not require multiple character types
-#mysql -uroot -p$mysql_root_pw -e "
-#    SET PERSIST validate_password.policy = 'LOW';
-#    "
-
-#### Display system variables
+#### Note: To display records for MySQL server system variables starting with 'validate':
 #mysql -uroot -p$mysql_root_pw -e "SHOW VARIABLES LIKE 'validate%';"
+
+
+#### Add rule to firewall
+#* Currently not used. Instead, we open the firewall on a case-by-case basis
+#* (i.e. we open up the MySQL server port for each IP address that requires access)
+
+#sudo firewall-cmd --permanent --add-service=mysql
+#sudo firewall-cmd --reload
 

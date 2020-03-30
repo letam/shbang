@@ -2,32 +2,54 @@
 
 # Create database for project
 
-[[ $db_name = "" ]] && >&2 echo "Error: Missing argument for \$db_name." && exit 1
-[[ $db_user = "" ]] && >&2 echo "Error: Missing argument for \$db_user." && exit 1
-[[ $db_password = "" ]] && >&2 echo "Error: Missing argument for \$db_password." && exit 1
+[[ $# != 1 ]] && >&2 echo "Usage: $0 DB_NAME" && exit 1
+
+db_name=$1 ; shift
+db_user=$db_name
+
+
+echo "INFO [$(date)]: Begin creation of MySQL database and user named '$db_name'."
+
+db_password="$(randpw)"
 
 
 ## Get password for root MySQL user
-mysql_root_pw=$(cat /home/$SUDO_USER/.credentials/mysql_root_pw)
-
+mysql_root_pw=$(cat /home/$USER/.credentials/mysql_root_pw)
 if [[ $mysql_root_pw = "" ]]; then
-	2>&1 echo "Missing password for root MySQL user in '/home/$SUDO_USER/.credentials/mysql_root_pw'!"
+	2>&1 echo "Missing password for root MySQL user in '/home/$USER/.credentials/mysql_root_pw'!"
 	exit 1
 fi
 
 
-## Create database and user
-echo "INFO: Creating database '$db_name' and user '$db_user'"
+## Store database credentials in file
+dir_db_credentials=/home/$USER/.credentials/mysql
+if [[ ! -d $dir_db_credentials ]]; then
+	mkdir -vp $dir_db_credentials
+	chmod -v 600 $dir_db_credentials
+fi
+echo "INFO: Saving credentials for database to file: '$dir_db_credentials/$db_name'"
+cat >> $dir_db_credentials/$db_name <<-EOF
+	db_host=localhost
+	db_name=$db_name
+	db_user=$db_user
+	db_password='$db_password'
+	EOF
+
+
+## Create database and user with privileges
+echo "INFO: Creating database '$db_name' and user '$db_user'..."
 mysql -uroot -p$mysql_root_pw -e "
 	CREATE DATABASE $db_name DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 	CREATE USER '$db_user'@'localhost' IDENTIFIED BY '$db_password';
-	GRANT ALL PRIVILEGES ON $db_name.* TO '$db_user'@'localhost';
+	GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, ALTER, INDEX ON $db_name.*
+		TO '$db_user'@'localhost';
 	FLUSH PRIVILEGES;
-	"
+	" 2>/tmp/mysql-error
+test $? != 0 && >&2 cat /tmp/mysql-error && exit 1
 
 
 ## Query to confirm that newly created user can access database
-echo "INFO: Verifying that user can access database"
+echo "INFO: Verifying that the user can access database..."
 mysql -u$db_user -p$db_password $db_name -e '
 	status
 
@@ -35,8 +57,19 @@ mysql -u$db_user -p$db_password $db_name -e '
 	  `id` INT AUTO_INCREMENT,
 	  `name` VARCHAR(255),
 	  PRIMARY KEY (`id`)
-	)
-
+	);
 	INSERT INTO users (name) VALUES ("Adam");
 	INSERT INTO users (name) VALUES ("Eve");
-	'
+	' 2>/tmp/mysql-error
+test $? != 0 && >&2 cat /tmp/mysql-error && exit 1
+
+### Sample of SQL script with value substitution
+mysql -u$db_user -p$db_password $db_name -e "
+	INSERT INTO users (name) VALUES ('$USER');
+	SELECT * from users;
+	" 2>/tmp/mysql-error 1>/dev/null
+test $? != 0 && >&2 cat /tmp/mysql-error && exit 1
+
+
+echo "INFO [$(date)]: Success! Database '$db_name' has been setup."
+

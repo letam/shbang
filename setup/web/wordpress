@@ -49,6 +49,15 @@ if ! command -v php >/dev/null; then
 	echo " DONE! [$(date)]"
 fi
 
+## Install MySQL client if not found
+if ! command -v mysql >/dev/null; then
+	[[ ! -d /var/log/setup/install ]] && mkdir -vp /var/log/setup/install
+	printf "INFO: Installing mysql..."
+	sudo dnf install -y mysql
+		2>&1 | tee /var/log/setup/install/mysql >/dev/null
+	echo " DONE! [$(date)]"
+fi
+
 
 # Main
 
@@ -61,34 +70,43 @@ html_dir=/var/www/$domain/html
 nginx_conf=/var/www/$domain/nginx.conf
 
 
-## Set up HTML website first
-$(dirname $0)/html $domain
+if [[ -d $project_dir ]]; then
+	>&2 echo "Error: Project directory '$project_dir' already exists. Aborting."
+	exit 1
+fi
 
 
-## Create database on localhost
+## Set up database connection, either to external server or create one on localhost
 
-### Store SQL credentials in file
 sql_friendly_name=$(echo $domain | tr "." "_")
 db_name="wp_$sql_friendly_name"
-db_user="$db_name"
-db_password="$(randpw)"
-db_host=localhost
 
-cat >> $project_dir/credentials.txt <<-EOF
+create_database() {
+	[[ ! -d /var/log/setup/db ]] && mkdir -vp /var/log/setup/db
+	su - $SUDO_USER -c "\"$(dirname $0)\"/../db/mysql $db_name" \
+		2>&1 | sudo tee /var/log/setup/db/mysql--$db_name
+	if test ${PIPESTATUS[0]} != 0; then
+		>&2 echo "INFO [$(date)]: Setup failed! 😧" && exit 1
+	fi
+}
 
-	# DOMAIN: $domain
+### Database server credentials
+db_credentials_file=/home/$SUDO_USER/.credentials/mysql/$db_name
+if [[ -f $db_credentials_file ]]; then
+	echo "INFO: Retrieving database credentials from file: '$db_credentials_file'"
+elif command -v mysqld >/dev/null; then
+	### If mysqld is found locally, then create locally-hosted MySQL database
+	echo "INFO: Creating database on local MySQL server..."
+	create_database
+else
+	>&2 echo "Error: No credentials found for database server."
+	exit 1
+fi
 
 
-	# SQL
-	db_name='$db_name'
-	db_user='$db_user'
-	db_password='$db_password'
-	db_host='$db_host'
-
-	EOF
-
-### Run SQL commands
-source "$(dirname $0)/../db/mysql"
+## Set up HTML website
+$(dirname $0)/html $domain
+test $? != 0 && >&2 echo "INFO [$(date)]: Setup failed! 😧" && exit 1
 
 
 ## Install Wordpress
@@ -100,7 +118,7 @@ downloads_dir=/home/$SUDO_USER/downloads
 [[ ! -d $downloads_dir ]] && mkdir -v $downloads_dir
 cd $downloads_dir
 
-if [[ ! -f wordpress.tgz ]] || find . -name wordpress.tgz -mmin +$((60*6)); then
+if [[ ! -f wordpress.tgz || $(find -name wordpress.tgz -mmin +$((60*6)) | wc -l) -gt 0 ]]; then
 	curl --output wordpress.tgz -L "https://wordpress.org/latest.tar.gz"
 fi
 
@@ -158,6 +176,7 @@ systemctl reload nginx
 
 
 ## Wordpress Configuration
+
 ## Automate the "famous five-minute WordPress installation"
 echo -e "\nAutomate the \"famous five-minute WordPress installation\"..."
 echo -e "\nSetting up wp-config.php..."
@@ -174,11 +193,13 @@ sleep 1  # Wait a sec for some breathing room
 # TODO: Ping server before submitting any data.
 
 echo "Set database credentials via POST request to /wp-admin/setup-config.php?step=2 ..."
+source $db_credentials_file
 password_encoded=$(php -r "echo urlencode('$db_password');")
 curl -si "https://$domain/wp-admin/setup-config.php?step=2" \
 	-XPOST \
 	--data "dbname=$db_name&uname=$db_user&pwd=$password_encoded&dbhost=$db_host&prefix=wp_&&submit=Submit" \
 	| head -1
+test $? != 0 && >&2 echo "INFO [$(date)]: Setup failed! 😧" && exit 1
 
 #### Alternative method to set db credentials and authentication keys and salt
 #cd $html_dir
@@ -257,6 +278,7 @@ curl -si "https://$domain/wp-admin/install.php?step=2" \
 	-H "Content-Type: application/x-www-form-urlencoded" \
 	--data "weblog_title=$website_title&user_name=$wp_user&admin_password=$password_encoded&admin_password2=$password_encoded&admin_email=$wp_user_email&Submit=Install+WordPress" \
 	| head -1
+test $? != 0 && >&2 echo "INFO [$(date)]: Setup failed! 😧" && exit 1
 
 
 ### Restore SELinux default labels to disallow server app from writing to system at root website directory

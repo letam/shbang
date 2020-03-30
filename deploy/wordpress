@@ -1,0 +1,125 @@
+#!/usr/bin/env bash
+
+# Remotely set up Wordpress website, connecting it to an external MySQL server
+
+[[ $# != 3 ]] && >&2 echo "Usage: $0 WEBSITE_NAME WP_DEST DB_DEST" && exit 1
+
+website_name="$1" ; shift
+wp_dest="$1" ; shift
+db_dest="$1" ; shift
+
+mysql_port=3306
+
+
+echo "INFO [$(date)]: Begin provision of Wordpress website connected to MySQL database server on separate host..."
+
+
+## Get private IP address values of DB server and Wordpress server
+
+wordpress_private_ip=$(ssh $wp_dest "private-ip" | cut -f1 -d/)
+if [[ $wordpress_private_ip = "" ]]; then
+	>&2 echo "Error: Cannot retrieve private IP of Wordpress server."
+	exit 1
+fi
+
+mysqld_private_ip=$(ssh $db_dest "private-ip" | cut -f1 -d/)
+if [[ $mysqld_private_ip = "" ]]; then
+	>&2 echo "Error: Cannot retrieve private IP of MySQL server."
+	exit 1
+fi
+
+
+## Generate MySQL credentials for new database for Wordpress site
+sql_friendly_name=$(echo $website_name | tr "." "_")
+db_name="wp_$sql_friendly_name"
+db_user="$db_name"
+db_password="$(randpw)"
+db_password_escaped=$db_password
+if grep -q "[\$]" <<< $db_password; then
+	db_password_escaped=$(echo $db_password | sed "s/\\$/\\\\$/g;")
+fi
+
+
+## Create database on MySQL server
+echo "INFO: Creating database on MySQL server..."
+ssh $db_dest "
+	mysql_root_pw=\$(cat ~/.credentials/mysql_root_pw)
+	alias mysql=\"mysql -uroot -p\$mysql_root_pw\"
+
+	mysql -uroot -p\$mysql_root_pw -e \"
+		CREATE DATABASE $db_name
+			DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+		CREATE USER '$db_user'@'$wordpress_private_ip'
+			IDENTIFIED BY '$db_password_escaped';
+		GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, ALTER, INDEX
+			ON $db_name.* TO '$db_user'@'$wordpress_private_ip';
+		FLUSH PRIVILEGES;
+		\" 2>/tmp/mysql-error
+	test \$? != 0 && >&2 cat /tmp/mysql-error && exit 1
+
+	### Confirm database exists
+	if ! mysql -uroot -p\$mysql_root_pw -Bse 'SHOW SCHEMAS;' \
+		2>/dev/null | grep -q $db_name
+	then
+		>&2 echo 'Error: Database was not created.'
+		exit 1
+	fi
+	echo 'INFO: Database '$db_name' was created!'
+
+	### Confirm that user can connect from private IP address of Wordpress server
+	if ! mysql -uroot -p\$mysql_root_pw -Bse 'SELECT Host, User FROM mysql.user;' \
+		2>/dev/null | grep $db_user | grep -q $wordpress_private_ip
+	then
+		>&2 echo 'Error: User was not created.'
+		exit 1
+	fi
+	echo 'INFO: User '$db_user'@'$wordpress_private_ip' was created!'
+	"
+test $? != 0 && >&2 echo "Failed... 😔" && exit 1
+echo "Success!"
+
+
+## Transfer values for MySQL database connection credentials to Wordpress server
+echo "INFO: Transfer MySQL database connection credentials to Wordpress server"
+ssh $wp_dest "
+	if [[ ! -d ~/.credentials ]]; then
+		mkdir -vp ~/.credentials
+		chmod -v 700 ~/.credentials
+	fi
+	if [[ ! -d ~/.credentials/mysql ]]; then
+		mkdir -vp ~/.credentials/mysql
+		chmod -v 700 ~/.credentials/mysql
+	fi
+	echo \"INFO: Saving credentials for database to file: '~/.credentials/mysql/$db_name'\"
+	cat >> ~/.credentials/mysql/$db_name <<-EOF
+		# Credentials for MySQL server
+		db_host=$mysqld_private_ip
+		db_name=$db_name
+		db_user=$db_user
+		db_password='$db_password_escaped'
+		EOF
+	"
+
+
+echo "INFO: Allow MySQL client connections from private IP address of Wordpress server"
+ssh $db_dest "sudo firewall-add-rule $mysql_port $wordpress_private_ip"
+
+
+## Confirm that we can query MySQL server from Wordpress server
+echo "INFO: Checking status of connection to MySQL server from Wordpress server..."
+ssh $wp_dest "
+	source ~/.credentials/mysql/$db_name
+	if ! mysql -h\$db_host -u\$db_user -p\"\$db_password\" \$db_name -e 'status' 2>/tmp/mysql-error
+	then
+		>&2 cat /tmp/mysql-error
+		exit 1
+	fi
+	"
+test $? != 0 && exit 1
+echo "Success!"
+
+
+## Run setup script on remote server
+echo "INFO [$(date)]: Deploying cronjob script to set up Wordpress site on server... 🚀"
+$(dirname $0)/setup-web wordpress $website_name $wp_dest
+
