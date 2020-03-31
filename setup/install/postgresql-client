@@ -1,0 +1,9 @@
+#! /usr/bin/env bash
+#
+# Install PostgreSQL database client
+#* Reference: https://www.postgresql.org/download/linux/redhat/
+
+[[ $(id -u) != 0 ]] && >&2 echo "Must be run as sudo/root." && exit 1
+
+$(dirname $0)/postgresql client
+

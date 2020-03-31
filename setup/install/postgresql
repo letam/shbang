@@ -1,0 +1,83 @@
+#!/usr/bin/env bash
+
+# Install PostgreSQL database server (or just the client)
+#* Reference: https://www.postgresql.org/download/linux/redhat/
+
+[[ $(id -u) != 0 ]] && >&2 echo "Must be run as sudo/root." && exit 1
+
+if [[ $1 = "client" ]]; then
+	install_client_only=0
+	echo "INFO [$(date)]: Installing PostgreSQL client..."
+else
+	echo "INFO [$(date)]: Installing PostgreSQL server..."
+fi
+
+
+pgsql_version=12
+rhel_version=8
+
+
+## Install the repository RPM:
+install_repository_rpm() {
+	dnf install -y https://download.postgresql.org/pub/repos/yum/reporpms/EL-$rhel_version-x86_64/pgdg-redhat-repo-latest.noarch.rpm
+}
+
+
+## Disable the built-in PostgreSQL module
+disable_builtin_postgresql_module() {
+	dnf -qy module disable postgresql
+}
+
+
+## Install the client packages
+install_client() {
+	dnf install -y postgresql$pgsql_version
+}
+
+
+## Install the server packages and initialize the database and enable automatic start
+install_server() {
+	dnf install -y postgresql$pgsql_version-server
+
+	/usr/pgsql-$pgsql_version/bin/postgresql-$pgsql_version-setup initdb
+	systemctl enable --now postgresql-$pgsql_version
+
+	## Create symblink to access service without referring to version
+	ln -s /usr/lib/systemd/system/postgresql-$pgsql_version.service /etc/systemd/system/postgresql.service
+
+	## Check status of service
+	systemctl status -l --no-pager postgresql
+}
+
+
+install_log_reader() {
+	cat > /usr/local/sbin/pgsql-log <<-"EOF"
+		# Display latest postgresql log contents in less, in tail mode
+		if ! groups | grep -q adm; then
+			>&2 echo "must be part of 'adm' group"
+			exit 1
+		else
+			sudo -v || exit 1
+		fi
+		pgsql_version=$(sudo -u postgres ls /var/lib/pgsql | sort -V | tail -1)
+		log_dir=/var/lib/pgsql/$pgsql_version/data/log
+		latest_log_file=$(sudo -u postgres ls -t $log_dir | head -1)
+		sudo -u postgres less -N+F $log_dir/$latest_log_file
+		EOF
+	chmod +x /usr/local/sbin/pgsql-log
+}
+
+
+# Main
+
+install_repository_rpm
+disable_builtin_postgresql_module
+
+if [[ $install_client_only = 0 ]]; then
+	install_client
+else
+	install_server
+	install_log_reader
+fi
+
+echo "INFO [$(date)]: Done!"
