@@ -2,11 +2,12 @@
 
 # Remotely teardown Wordpress website, along with its MySQL database and user
 
-[[ $# != 3 ]] && >&2 echo "Usage: $0 WEBSITE_NAME WP_DEST DB_DEST" && exit 1
+[[ $# -lt 2 || $# -gt 3 ]] && >&2 echo "Usage: $0 WEBSITE_NAME WP_DEST [DB_DEST]" && exit 1
 
 website_name="$1" ; shift
 wp_dest="$1" ; shift
 db_dest="$1" ; shift
+[[ $db_dest = "" ]] && db_dest=$wp_dest
 
 mysql_port=3306
 
@@ -14,15 +15,20 @@ echo "INFO [$(date)]: Begin teardown of Wordpress website and its MySQL database
 
 ## Get private IP address values of DB server and Wordpress server
 
-wordpress_private_ip=$(ssh $wp_dest "private-ip" | cut -f1 -d/)
-if [[ $wordpress_private_ip = "" ]]; then
-	>&2 echo "Error: Cannot retrieve private IP of Wordpress server."
-	exit 1
-fi
-mysqld_private_ip=$(ssh $db_dest "private-ip" | cut -f1 -d/)
-if [[ $mysqld_private_ip = "" ]]; then
-	>&2 echo "Error: Cannot retrieve private IP of MySQL server."
-	exit 1
+if [[ $db_dest != $wp_dest ]]; then
+	wordpress_private_ip=$(ssh $wp_dest "private-ip" | cut -f1 -d/)
+	if [[ $wordpress_private_ip = "" ]]; then
+		>&2 echo "Error: Cannot retrieve private IP of Wordpress server."
+		exit 1
+	fi
+	mysqld_private_ip=$(ssh $db_dest "private-ip" | cut -f1 -d/)
+	if [[ $mysqld_private_ip = "" ]]; then
+		>&2 echo "Error: Cannot retrieve private IP of MySQL server."
+		exit 1
+	fi
+else
+	wordpress_private_ip=localhost
+	mysqld_private_ip=localhost
 fi
 
 
@@ -64,8 +70,10 @@ echo "Success!"
 
 
 #* Do not remove firewall rule for this Wordpress-MySQL port connection, in case there are other active Wordpress connections
-#echo "INFO: Remove MySQL client connections from private IP address of Wordpress server"
-#ssh $db_dest "sudo firewall-remove-rule $mysql_port $wordpress_private_ip"
+#if [[ $db_dest != $wp_dest ]]; then
+#    echo "INFO: Remove MySQL client connections from private IP address of Wordpress server"
+#    ssh $db_dest "sudo firewall-remove-rule $mysql_port $wordpress_private_ip"
+#fi
 
 
 # Remove traces of Wordpress site on Wordpress server
