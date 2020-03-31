@@ -42,7 +42,6 @@ fi
 # Main
 
 ## Construct command to send via SSH, to be run immediately on a bash-compatible shell
-## WARNING: To avoid possible errors, script contents substituted into the command should not contain single quotes (')!
 
 command="
 echo \"INFO [\$(date)]: Begin SSH command.\"
@@ -56,7 +55,9 @@ authorized_keys='$authorized_keys'
 new_user='$new_user'
 "
 
+
 ### Transfer utility scripts for system administration
+
 sbin_script_files=(
 	tmst		# Return current timestamp (UTC) in a filename-friendly form
 	bak 		# Backup file while including date created
@@ -72,11 +73,15 @@ sbin_script_files=(
 	firewall-add-rule	# Allow connection to port from IP address
 	firewall-remove-rule	# Remove rule for connection to port from IP address
 )
+
+#### NOTE: Track scripts containing single quotes, so they can transfer successfully
+files_containing_single_quotes="randpw|firewall"
+
 IFS_ORIGINAL=$IFS
 for file in "${sbin_script_files[@]}"; do
 	script=$(<"./sbin/$file")
 	#### Hack to ensure that single quote (') characters can be transferred successfully
-	if [[ $file =~ randpw|firewall ]]; then
+	if [[ $file =~ $files_containing_single_quotes ]]; then
 		IFS=""
 		script=$(echo $script | sed "s%'%SINGLE_QUOTE%g")
 		IFS=$IFS_ORIGINAL
@@ -88,7 +93,7 @@ if test -f /etc/centos-release; then
 	sudo ln -s /usr/local/sbin/$file /usr/sbin
 fi
 "
-	if [[ $file =~ randpw|firewall ]]; then
+	if [[ $file =~ $files_containing_single_quotes ]]; then
 		command+="
 sudo sed -i \"s%SINGLE_QUOTE%'%g\" /usr/local/sbin/$file
 "
