@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+
+# Create PostgreSQL database user
+
+[[ $(id -u) != 0 ]] && >&2 echo "Error: Must be run as sudo/root." && exit 1
+
+[[ $# < 2 || $# > 4 ]] && >&2 echo "Usage: $0 USERNAME PASSWORD [USER_HOST]" && exit 1
+
+pgsql_version=$(sudo -u postgres ls /var/lib/pgsql | sort -V | tail -1)
+
+
+username=$1 ; shift
+password=$1 ; shift
+host=$1 ; shift
+
+
+## Create user on database server
+sudo -i -u postgres psql -c "
+	CREATE USER $username WITH CREATEDB PASSWORD '$password';
+	" || exit 1
+
+
+## Update authentication configuration with new rule
+
+### Insert new authentication rule for user to access database
+auth_conf=/var/lib/pgsql/$pgsql_version/data/pg_hba.conf
+echo "Update PostgreSQL host auth configuration file '$auth_conf'"
+sudo bak $auth_conf
+rule="local	all	$username	$host	scram-sha-256"
+echo "- Inserting rule: '$rule'"
+sudo sed -i -E "s/(^local\s+all\s+all\s+peer$)/$rule\n\1/" $auth_conf
+
+### Reload config settings
+echo "Reload PostgreSQL server conf via: 'SELECT pg_reload_conf();'"
+sudo -i -u postgres psql -c "SELECT pg_reload_conf();" >/dev/null
+
+
+## Create database for user as new user
+export PGPASSWORD=$password
+psql -U$username -d postgres -c "CREATE DATABASE $username;"
+test $? != 0 && exit 1
+unset PGPASSWORD
