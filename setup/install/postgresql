@@ -35,18 +35,35 @@ install_client() {
 }
 
 
-## Install the server packages and initialize the database and enable automatic start
+## Install the server packages, initialize the database, enable system service
 install_server() {
+	echo "Install PostgreSQL server (version $pgsql_version)"
 	dnf install -y postgresql$pgsql_version-server
 
+	## Initialize database
 	/usr/pgsql-$pgsql_version/bin/postgresql-$pgsql_version-setup initdb
-	systemctl enable --now postgresql-$pgsql_version
+
+	echo "Enable system service."
+	systemctl enable postgresql-$pgsql_version
 
 	## Create symblink to access service without referring to version
 	ln -s /usr/lib/systemd/system/postgresql-$pgsql_version.service /etc/systemd/system/postgresql.service
+}
 
-	## Check status of service
-	systemctl status -l --no-pager postgresql
+
+## Configure authentication settings for server
+configure_auth() {
+	echo "Backup initial database server configuration file."
+	server_conf=/var/lib/pgsql/$pgsql_version/data/postgresql.conf
+	cp -vp $server_conf $server_conf.bak
+
+	password_encryption="scram-sha-256"
+	echo "Set password encryption scheme to '$password_encryption'"
+	sed -i -E "s/(#password_encryption.*)/\1\npassword_encryption = $password_encryption/" $server_conf
+
+	echo "Backup initial host-based authentication configuration file"
+	auth_conf=/var/lib/pgsql/$pgsql_version/data/pg_hba.conf
+	cp -vp $auth_conf $auth_conf.bak
 }
 
 
@@ -77,7 +94,13 @@ if [[ $install_client_only = 0 ]]; then
 	install_client
 else
 	install_server
+	configure_auth
 	install_log_reader
+
+	systemctl start postgresql-$pgsql_version
+
+	## Check status of service
+	systemctl status -l --no-pager postgresql-$pgsql_version
 fi
 
 echo "INFO [$(date)]: Done!"
