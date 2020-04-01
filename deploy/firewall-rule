@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+
+# Add or remove firewall rule on remote server that allows connection to port from client
+
+[[ $# != 4 ]] && >&2 echo "Usage: $0 HOST_DEST OPTION PORT IP_ADDRESS" && exit 1
+
+dest=$1 ; shift
+option=$1 ; shift
+if [[ $option != "add" && $option != "remove" ]]; then
+	>&2 echo "Error: Invalid option. Must be one of 'add' or 'remove'."
+	exit 1
+fi
+port=$1 ; shift
+ip_address=$1 ; shift
+
+
+program="firewall-$option-rule"
+args="$port $ip_address"
+
+
+$(dirname $0)/run-sbin $dest $program $args

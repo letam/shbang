@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+
+# Run an sbin program on remote server
+
+[[ $# < 2 ]] && >&2 echo "Usage: $0 DEST PROGRAM [...ARGS]" && exit 1
+
+dest=$1 ; shift
+program=$1 ; shift
+args="$@"
+
+
+# Get script content from library
+
+file=$(dirname $0)/../sbin/$program
+
+
+# Read script contents, and escape single quotes if found.
+IFS=""
+contains_single_quotes=n
+if grep -q "'" $file; then
+	contains_single_quotes=y
+	script=$(sed "s%'%SINGLE_QUOTE%g" "$file")
+else
+	script=$(<"$file")
+fi
+
+
+# Construct command to transfer script and then execute it
+command="
+	dir=/usr/local/sbin
+	contains_single_quotes=$contains_single_quotes
+
+	# Create backup of existing script
+	if [[ -f \$dir/$program ]]; then
+		backup=\$dir/$program.bak.\$(tmst)
+		sudo cp -p \$dir/$program \$backup
+	fi
+
+	# Write script
+	sudo tee \$dir/$program <<< '$script' >/dev/null
+	sudo chmod +x \$dir/$program
+
+	# Create symlink in /usr/sbin for RHEL
+	if command -v dnf >/dev/null; then
+		sudo ln -s \$dir/$program /usr/sbin 2>/dev/null
+	fi
+
+	# Restore single quotes in script
+	if [[ \$contains_single_quotes = y ]]; then
+		sudo sed -i \"s%SINGLE_QUOTE%'%g\" \$dir/$program
+	fi
+
+	# If script content has not changed, then restore it (removing the fresh backup)
+	if [[ \$backup != '' && \$(diff \$dir/$program \$backup) = '' ]]; then
+		sudo mv \$backup \$dir/$program
+	fi
+
+	sudo \$dir/$program $args
+	"
+
+ssh $dest $command
