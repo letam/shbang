@@ -88,16 +88,16 @@ for file in "${sbin_script_files[@]}"; do
 		IFS=$IFS_ORIGINAL
 	fi
 	command+="
-echo '$script' | sudo tee /usr/local/sbin/$file >/dev/null
-sudo chmod +x /usr/local/sbin/$file
-if test -f /etc/centos-release; then
-	sudo ln -s /usr/local/sbin/$file /usr/sbin
-fi
-"
+		echo '$script' | sudo tee /usr/local/sbin/$file >/dev/null
+		sudo chmod +x /usr/local/sbin/$file
+		if test -f /etc/centos-release; then
+			sudo ln -s /usr/local/sbin/$file /usr/sbin
+		fi
+		"
 	if [[ $file =~ $files_containing_single_quotes ]]; then
 		command+="
-sudo sed -i \"s%SINGLE_QUOTE%'%g\" /usr/local/sbin/$file
-"
+			sudo sed -i \"s%SINGLE_QUOTE%'%g\" /usr/local/sbin/$file
+			"
 	fi
 done
 
