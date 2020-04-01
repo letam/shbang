@@ -16,6 +16,7 @@ file=$(dirname $0)/../sbin/$program
 
 # Read script contents, and escape single quotes if found.
 IFS=""
+# TODO: Investigate why we need IFS="" here but not in setup-server.
 contains_single_quotes=n
 if grep -q "'" $file; then
 	contains_single_quotes=y
