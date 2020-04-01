@@ -57,6 +57,7 @@ new_user='$new_user'
 
 
 ### Transfer utility scripts for system administration
+#### WARNING: If a script contains single quotes, please ensure that it does not also contain the delimeter we chose to use in sed, namely '%'. If there is a conflict, investigate for another delimiter.
 
 sbin_script_files=(
 	tmst		# Return current timestamp (UTC) in a filename-friendly form
@@ -74,27 +75,23 @@ sbin_script_files=(
 	firewall-remove-rule	# Remove rule for connection to port from IP address
 	execute-immediate-cronjob	# Execute next queued cronjob immediately
 )
-
-#### NOTE: Track scripts containing single quotes, so they can transfer successfully
-files_containing_single_quotes="randpw|firewall"
-
-IFS_ORIGINAL=$IFS
 for file in "${sbin_script_files[@]}"; do
-	script=$(<"./sbin/$file")
-	#### Hack to ensure that single quote (') characters can be transferred successfully
-	if [[ $file =~ $files_containing_single_quotes ]]; then
-		IFS=""
-		script=$(echo $script | sed "s%'%SINGLE_QUOTE%g")
-		IFS=$IFS_ORIGINAL
+	contains_single_quotes=n
+	if grep -q "'" ./sbin/$file; then
+		contains_single_quotes=y
+		#### Hack to ensure that single quote (') characters can be transferred successfully
+		script=$(sed "s%'%SINGLE_QUOTE%g" < "./sbin/$file")
+	else
+		script=$(<"./sbin/$file")
 	fi
 	command+="
-		echo '$script' | sudo tee /usr/local/sbin/$file >/dev/null
+		sudo tee /usr/local/sbin/$file <<< '$script' >/dev/null
 		sudo chmod +x /usr/local/sbin/$file
 		if test -f /etc/centos-release; then
 			sudo ln -s /usr/local/sbin/$file /usr/sbin
 		fi
 		"
-	if [[ $file =~ $files_containing_single_quotes ]]; then
+	if [[ $contains_single_quotes = y ]]; then
 		command+="
 			sudo sed -i \"s%SINGLE_QUOTE%'%g\" /usr/local/sbin/$file
 			"
