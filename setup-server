@@ -72,6 +72,7 @@ sbin_script_files=(
 	private-ip	# Return private IP address of system (if it exists)
 	firewall-add-rule	# Allow connection to port from IP address
 	firewall-remove-rule	# Remove rule for connection to port from IP address
+	execute-immediate-cronjob	# Execute next queued cronjob immediately
 )
 
 #### NOTE: Track scripts containing single quotes, so they can transfer successfully

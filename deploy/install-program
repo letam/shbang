@@ -35,7 +35,7 @@ echo \"\
 	&& echo \"__START__: \$\(date\)\" | sudo tee -a $log >/dev/null \
 	&& sudo /opt/orc/$script_path 2>&1 | sudo tee -a $log >/dev/null \
 	&& echo \"__END__: \$\(date\)\" | sudo tee -a $log >/dev/null \
-	# remove_upon_execute \
+	# IMMEDIATE_EXECUTE_AND_REMOVE \
 	\" | sudo tee -a /etc/crontab >/dev/null
 
 "

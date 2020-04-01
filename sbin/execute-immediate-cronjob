@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+
+# Execute next queued one-time cronjob meant for $USER
+
+command=$(
+	awk "/\s$USER\s/ && /# IMMEDIATE_EXECUTE_AND_REMOVE/" < /etc/crontab \
+		| head -1 \
+		| tr -d "\t" \
+		| sed -E "s|( ?\*){5}$USER(.*)|\2|"
+	)
+
+[[ $command != "" ]] && eval $command
