@@ -7,5 +7,35 @@ if [[ $1 = "" ]]; then
 else
 	ip_addr_prefix=$1
 fi
-ip a | grep $ip_addr_prefix | head -1 | tr -s " " | cut -f 3 -d " "
 
+get_private_ip_with_prefix() {
+	prefix="$1"
+	ip a | grep "inet $prefix" | head -1 | tr -s " " | cut -f 3 -d " "
+}
+
+address=$(get_private_ip_with_prefix $ip_addr_prefix)
+
+if [[ $address = "" &&  $1 != "" ]]; then
+	>&2 echo "No private IP with the supplied prefix found."
+	exit 1
+fi
+
+
+# Retrieve IPv4 private IP address from DigitalOcean droplet
+if [[ $address = "" ]]; then
+	address=$(ip a | awk "/inet 10\./ && / eth1/" | tr -s " " | cut -f 3 -d " ")
+fi
+
+# Retrieve IPv4 private IP address from Linode server
+if [[ $address = "" ]]; then
+	address=$(ip a | awk "/inet 192\.168\./ && / eth0/" | tr -s " " | cut -f 3 -d " ")
+fi
+
+# Placeholder
+# Another option of prefix for private IP, but not used by anyone we know.
+if [[ $address = "" ]]; then
+	ip_address_prefix=172
+	address=$(get_private_ip_with_prefix $ip_addr_prefix)
+fi
+
+echo $address
