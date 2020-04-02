@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Return private IP address (CIDR Notation) of server
+# Return private IPv4 address (CIDR Notation) of server
 
 if [[ $1 = "" ]]; then
 	ip_addr_prefix=192.168
@@ -8,9 +8,11 @@ else
 	ip_addr_prefix=$1
 fi
 
+ip_a=$(ip -4 a)
+
 get_private_ip_with_prefix() {
 	prefix="$1"
-	ip a | grep "inet $prefix" | head -1 | tr -s " " | cut -f 3 -d " "
+	grep "inet $prefix" <<< $ip_a | head -1 | tr -s " " | cut -f 3 -d " "
 }
 
 address=$(get_private_ip_with_prefix $ip_addr_prefix)
@@ -23,12 +25,12 @@ fi
 
 # Retrieve IPv4 private IP address from DigitalOcean droplet
 if [[ $address = "" ]]; then
-	address=$(ip a | awk "/inet 10\./ && / eth1/" | tr -s " " | cut -f 3 -d " ")
+	address=$(awk "/inet 10\./ && / eth1/" <<< $ip_a | tr -s " " | cut -f 3 -d " ")
 fi
 
 # Retrieve IPv4 private IP address from Linode server
 if [[ $address = "" ]]; then
-	address=$(ip a | awk "/inet 192\.168\./ && / eth0/" | tr -s " " | cut -f 3 -d " ")
+	address=$(awk "/inet 192\.168\./ && / eth0/" <<< $ip_a | tr -s " " | cut -f 3 -d " ")
 fi
 
 # Placeholder
