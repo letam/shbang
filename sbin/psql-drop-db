@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+
+# Drop  PostgreSQL database and user
+
+[[ $(id -u) != 0 ]] && >&2 echo "Error: Must be run as sudo/root." && exit 1
+
+[[ $# < 1 || $# > 3 ]] && >&2 echo "Usage: $0 DBNAME [USER_HOST]" && exit 1
+
+dbname=$1 ; shift
+host=$1 ; shift
+
+username=$dbname
+
+
+pgsql_version=$(sudo -u postgres ls /var/lib/pgsql | sort -V | tail -1)
+
+
+## Drop database
+sudo -i -u postgres psql -c "
+	DROP DATABASE $dbname;
+	" || exit 1
+
+## Drop user
+sudo -i -u postgres psql -c "
+	DROP USER $username;
+	" || exit 1
+
+
+## Update authentication configuration
+
+### Remove authentication rule for user to database
+auth_conf=/var/lib/pgsql/$pgsql_version/data/pg_hba.conf
+echo "Update PostgreSQL host auth configuration file '$auth_conf'"
+backup=$auth_conf.bak.$(tmst)
+sudo cp -p $auth_conf $backup
+rule="local	$dbname	$username	$host	scram-sha-256"
+echo "- Removing rule: '$rule'"
+sudo sed -i "/$rule/d" $auth_conf
+
+### Reload config settings
+if [[ $(diff $auth_conf $backup) != "" ]]; then
+	echo "Reload PostgreSQL server conf via: 'SELECT pg_reload_conf();'"
+	sudo -i -u postgres psql -c "SELECT pg_reload_conf();" >/dev/null
+else
+	echo "Nothing changed."
+	sudo mv $backup $auth_conf
+fi
+
+
