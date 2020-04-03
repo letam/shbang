@@ -51,8 +51,8 @@ install_server() {
 }
 
 
-## Configure authentication settings for server
-configure_auth() {
+## Configure authentication and connection settings for server
+configure_settings() {
 	echo "Backup initial database server configuration file."
 	server_conf=/var/lib/pgsql/$pgsql_version/data/postgresql.conf
 	cp -vp $server_conf $server_conf.bak
@@ -60,6 +60,13 @@ configure_auth() {
 	password_encryption="scram-sha-256"
 	echo "Set password encryption scheme to '$password_encryption'"
 	sed -i -E "s/(#password_encryption.*)/\1\npassword_encryption = $password_encryption/" $server_conf
+
+	echo "Set server to listen to all addresses (shield by firewall)."
+	sed -i -E "s/(#listen_addresses =.*)/\1\nlisten_addresses = '*'/" $server_conf
+
+	#echo "Set up SSL settings for server."
+	#sed -i -E "s/(#ssl =.*)/\1\nssl = on/" $server_conf
+	## Handle separately
 
 	echo "Backup initial host-based authentication configuration file"
 	auth_conf=/var/lib/pgsql/$pgsql_version/data/pg_hba.conf
@@ -94,7 +101,7 @@ if [[ $install_client_only = 0 ]]; then
 	install_client
 else
 	install_server
-	configure_auth
+	configure_settings
 	install_log_reader
 
 	systemctl start postgresql-$pgsql_version

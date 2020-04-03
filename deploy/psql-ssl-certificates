@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+
+# Generate SSL certficate for secure TCP/IP connections to PostgreSQl server
+#* Reference: https://www.postgresql.org/docs/12/ssl-tcp.html
+
+
+[[ $# != 3 ]] && >&2 echo "Usage: $0 HOSTNAME SERVER CLIENT" && exit 1
+
+hostname=$1 ; shift
+server=$1 ; shift
+client=$1 ; shift
+
+
+## Run script to generate key and certificates
+$(dirname $0)/../sbin/generate-ssl-certificates $hostname
+
+cd ~/certs/$hostname
+
+
+## Transfer server key and cert to server
+ssh $server "mkdir -vp ~/certs/$hostname"
+scp -p server.key server.crt $server:~/certs/$hostname
+ssh $server "
+	pgdata=\$(sudo -i -u postgres psql -t -c 'SHOW data_directory')
+	sudo cp -vp -t \$pgdata ~/certs/$hostname/server.{key,crt}
+	sudo chown postgres \$pgdata/server.key
+	pgsql_version=\$(sudo -i -u postgres psql -c '\\echo :VERSION' \
+		| cut -f2 -d' ' | cut -f1 -d.)
+	sudo bak \$pgdata/postgresql.conf
+	echo 'Set up SSL settings for server.'
+	sudo sed -i -E 's/(#ssl =.*)/\\1\\nssl = on/' \$pgdata/postgresql.conf
+	sudo systemctl restart postgresql-\$pgsql_version
+	"
+
+
+## Transfer client cert to client
+#* NOTE: Although the postgresql doc says to have root.crt on client, the connection seems to work without it.
+#ssh $client "mkdir -vp ~/certs/$hostname"
+#scp -p root.crt $client:~/certs/$hostname
+#ssh $client "
+#    pgdata=\$(sudo -i -u postgres psql -t -c 'SHOW data_directory')
+#    sudo cp -vp ~/certs/$hostname/root.crt $pgdata
+#    "
+
+
+cd - >/dev/null
+

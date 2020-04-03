@@ -1,0 +1,82 @@
+#!/usr/bin/env bash
+
+# Generate SSL certficate for secure TCP/IP connections between server and client
+#* Reference: https://www.postgresql.org/docs/12/ssl-tcp.html
+
+[[ $# != 1 ]] && >&2 echo "Usage: $0 HOSTNAME" && exit 1
+
+hostname=$1 ; shift
+
+
+is_ubuntu() {
+	[[ $(uname -a) =~ "Ubuntu" ]]
+}
+
+
+if is_ubuntu; then
+	#sed "s/^RANDFILE\s*=\s*\$ENV::HOME\/\.rnd/#/" < $openssl_dir/openssl.cnf > .tmp.openssl.cnf
+	#OPENSSL_DIR=$PWD/.tmp.openssl.cnf
+	touch ~/.rnd
+fi
+
+
+openssl_dir=$(openssl version -d | cut -f2 -d " " | tr -d '"')
+
+
+mkdir -vp ~/certs/$hostname
+cd ~/certs/$hostname
+
+
+## Generate root cert, to be stored on the client.
+
+### To create a server certificate whose identity can be validated by clients, first create a certificate signing request (CSR) and a public/private key file:
+openssl req -new -nodes -text -out root.csr \
+	-keyout root.key -subj "/CN=$hostname"
+chmod og-rwx root.key
+
+### Sign the request with the key to create a root certificate authority (using the default OpenSSL configuration file location on Linux):
+openssl x509 -req -in root.csr -text -days 3650 \
+	-extfile $openssl_dir/openssl.cnf -extensions v3_ca \
+	-signkey root.key -out root.crt
+
+
+## Generate leaf cert, to be stored on the server
+
+### Create a server certificate signed by the new root certificate authority:
+openssl req -new -nodes -text -out server.csr \
+	-keyout server.key -subj "/CN=dbhost.$hostname"
+chmod og-rwx server.key
+
+openssl x509 -req -in server.csr -text -days 365 \
+	-CA root.crt -CAkey root.key -CAcreateserial \
+	-out server.crt
+
+
+cd - >/dev/null
+
+exit
+
+
+# TODO: Investigate intermediate certs
+
+## Generate intermediate cert, for use in creating future certificates
+openssl req -new -nodes -text -out intermediate.csr \
+	-keyout intermediate.key -subj "/CN=intermediate.$hostname"
+chmod og-rwx intermediate.key
+
+openssl x509 -req -in intermediate.csr -text -days 1825 \
+	-extfile $openssl_dir/openssl.cnf -extensions v3_ca \
+	-CA root.crt -CAkey root.key -CAcreateserial \
+	-out intermediate.crt
+
+
+## Generate leaf cert, to be stored on the server
+### Create a server certificate signed by the new root certificate authority:
+openssl req -new -nodes -text -out server.csr \
+	-keyout server.key -subj "/CN=dbhost.$hostname"
+chmod og-rwx server.key
+
+openssl x509 -req -in server.csr -text -days 365 \
+	-CA intermediate.crt -CAkey intermediate.key -CAcreateserial \
+	-out server.crt
+
