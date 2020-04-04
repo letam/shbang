@@ -11,12 +11,21 @@ db_dest="$1" ; shift
 
 mysql_port=3306
 
+min_mem_size_for_combined_server=1536000
+
 
 ## Check whether to set up connection to local MySQL server
 if [[ $db_dest = $wp_dest ]]; then
-	ssh $wp_dest "command -v mysqld >/dev/null"
-	test $? != 0 && >&2 echo "Error: MySQL server not found on target server." && exit 1
-	echo "INFO [$(date)]: Will set up Wordpress website connected to MySQL database server on same host..."
+	if ! ssh $wp_dest "command -v mysqld >/dev/null"; then
+		server_mem_size=$(ssh $app_dest "head -1 < /proc/meminfo | cut -f2 -d: | tr -s ' ' | cut -f2 -d' '")
+		if (( server_mem_size > min_mem_size_for_combined_server )); then
+			echo "INFO [$(date)]: Will set up Wordpress website connected to MySQL database server on same host..."
+			$(dirname $0)/install-program mysql $app_dest
+		else
+			>&2 echo "Error: Server is too small to contain both Wordpress web app and MySQL server with default settings."
+			exit 1
+		fi
+	fi
 else
 	echo "INFO [$(date)]: Begin provision of Wordpress website connected to MySQL database server on separate host..."
 fi
