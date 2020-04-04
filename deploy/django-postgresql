@@ -44,12 +44,15 @@ sql_friendly_name=$(echo $website_name | tr "." "_")
 db_name="$sql_friendly_name"
 db_user="$db_name"
 db_password="$(randpw)"
-#* NOTE: This script does not work 100%
-#db_password='Pw!v@v#$v%^&*()-=_+1' # TODO: Fix to work with such password
-db_password_escaped=$db_password
-if grep -q "[\$]" <<< $db_password_escaped; then
-	db_password_escaped=$(sed "s/\\$/\\\\$/g;" <<< $db_password_escaped)
-fi
+
+### Return escaped value if it contains special character '$'
+escape_value() {
+	if grep -q "[\$]" <<< $1; then
+		sed "s/\\$/\\\\$/g;" <<< $1
+	else
+		echo $1
+	fi
+}
 
 
 ## Create database on PostgreSQL data server
@@ -63,14 +66,14 @@ fi
 
 echo "INFO: Creating database on PostgreSQL data server..."
 $(dirname $0)/run-sbin $db_dest psql-create-db \
-	"$sql_friendly_name" "'$db_password_escaped'" $app_host
+	"$sql_friendly_name" "'$db_password'" $app_host
 test $? != 0 \
 	&& >&2 echo "ERROR: Failed to create database and user for '$sql_friendly_name'." \
 	&& exit 1
 
 echo "INFO: Creating test database on PostgreSQL data server..."
 $(dirname $0)/run-sbin $db_dest psql-create-db \
-	"${sql_friendly_name}_test" "$'db_password_escaped'" $app_host
+	"${sql_friendly_name}_test" "$'db_password'" $app_host
 test $? != 0 \
 	&& >&2 echo "ERROR: Failed to create database and user for '${sql_friendly_name}_test'." \
 	&& exit 1
@@ -95,7 +98,7 @@ ssh $app_dest "
 		db_host=$db_host
 		db_name=$db_name
 		db_user=$db_user
-		db_password='$db_password_escaped'
+		db_password='$(escape_value $db_password)'
 		EOF
 	"
 
