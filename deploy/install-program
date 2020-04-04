@@ -2,11 +2,12 @@
 
 # Install program, from script in setup/install, on remote server
 
-[[ $# != 2 ]] && >&2 echo "Usage: $0 PROGRAM_NAME DEST" && exit 1
+[[ $# < 2 || $# > 3 ]] && >&2 echo "Usage: $0 PROGRAM_NAME DEST [NOW]" && exit 1
 
 
 program_name="$1" ; shift
 dest="$1" ; shift
+now="$1" ; shift
 
 dest_user=$(sed -E "s/(.*)@.*/\1/" <<< $dest)
 
@@ -22,23 +23,34 @@ script_path="setup/install/$program_name"
 log="/var/log/$script_path"
 
 command="
+	# Ensure log directory exists
+	[[ ! -d /var/log/setup/install ]] && sudo mkdir -vp /var/log/setup/install
+	"
 
-# Ensure log directory exists
-[[ ! -d /var/log/setup/install ]] && sudo mkdir -vp /var/log/setup/install
+if [[ $now = "" ]]; then
+	command+="
+		echo \"INFO [\$(date)]: Set cronjob so the setup script will run at the next minute.\"
+		sudo bak /etc/crontab >/dev/null
+		echo \"\
+			* *	* * *	$dest_user	\
+			sudo sed -i \\\"\\|$script_path|d\\\" /etc/crontab \
+			&& echo \"Executing cronjob that was scheduled at: \$(date)\" \
+			&& echo \"__START__: \$\(date\)\" | sudo tee -a $log >/dev/null \
+			&& sudo /opt/orc/$script_path 2>&1 | sudo tee -a $log >/dev/null \
+			&& echo \"__END__: \$\(date\)\" | sudo tee -a $log >/dev/null \
+			# IMMEDIATE_EXECUTE_AND_REMOVE \
+			\" | sudo tee -a /etc/crontab >/dev/null
+		"
+else
+	command+="
+		echo \"INFO [\$(date)]: Executing /opt/orc/$script_path ...\" \
+		echo \"Executing script that was scheduled at: \$(date)\" \
+		&& echo \"__START__: \$(date)\" | sudo tee -a $log \
+		&& sudo /opt/orc/$script_path 2>&1 | sudo tee -a $log \
+		&& echo \"__END__: \$(date)\" | sudo tee -a $log
+		"
+fi
 
-echo \"INFO [\$(date)]: Set cronjob so the setup script will run at the next minute.\"
-sudo bak /etc/crontab >/dev/null
-echo \"\
-	* *	* * *	$dest_user	\
-	sudo sed -i \\\"\\|$script_path|d\\\" /etc/crontab \
-	&& echo \"Executing cronjob that was scheduled at: $(date)\" \
-	&& echo \"__START__: \$\(date\)\" | sudo tee -a $log >/dev/null \
-	&& sudo /opt/orc/$script_path 2>&1 | sudo tee -a $log >/dev/null \
-	&& echo \"__END__: \$\(date\)\" | sudo tee -a $log >/dev/null \
-	# IMMEDIATE_EXECUTE_AND_REMOVE \
-	\" | sudo tee -a /etc/crontab >/dev/null
-
-"
 
 ssh $dest "$command"
 

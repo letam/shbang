@@ -1,0 +1,136 @@
+#!/usr/bin/env bash
+
+# Remotely set up Django web app, connecting it to local PostgreSQL server
+# TODO: Complete implementation for setup for remote database server
+
+[[ $# -lt 2 || $# -gt 3 ]] && >&2 echo "Usage: $0 WEBSITE_NAME APP_DEST [DB_DEST]" && exit 1
+
+website_name="$1" ; shift
+app_dest="$1" ; shift
+db_dest="$1" ; shift
+[[ $db_dest = "" ]] && db_dest=$app_dest
+
+psql_port=5432
+
+
+## Check whether to set up connection to local or remote PostgreSQL server
+if [[ $db_dest = $app_dest ]]; then
+	echo "INFO [$(date)]: Will set up Django web app connected to PostgreSQL data server on same host..."
+else
+	echo "INFO [$(date)]: Begin provision of Django web app connected to PostgreSQL data server on separate host..."
+fi
+
+
+## Get values for server hosts
+if [[ $db_dest != $app_dest ]]; then
+	### Get private IP address values of app server and data server
+	app_host=$(ssh $app_dest "private-ip" | cut -f1 -d/)
+	if [[ $app_dest = "" ]]; then
+		>&2 echo "Error: Cannot retrieve private IP of Django web app server."
+		exit 1
+	fi
+	db_host=$(ssh $db_dest "private-ip" | cut -f1 -d/)
+	if [[ $db_dest = "" ]]; then
+		>&2 echo "Error: Cannot retrieve private IP of PostgreSQL data server."
+		exit 1
+	fi
+else
+	app_host=localhost
+	db_host=localhost
+fi
+
+
+## Generate credentials for new PostgreSQL database to serve web app server
+sql_friendly_name=$(echo $website_name | tr "." "_")
+db_name="$sql_friendly_name"
+db_user="$db_name"
+db_password="$(randpw)"
+#* NOTE: This script does not work 100%
+#db_password='Pw!v@v#$v%^&*()-=_+1' # TODO: Fix to work with such password
+db_password_escaped=$db_password
+if grep -q "[\$]" <<< $db_password_escaped; then
+	db_password_escaped=$(sed "s/\\$/\\\\$/g;" <<< $db_password_escaped)
+fi
+
+
+## Create database on PostgreSQL data server
+
+if ! ssh $db_dest "ps aux | grep -q '^postgres '"; then
+	echo "INFO: Installing PostgreSQL server..."
+	$(dirname $0)/install-program postgresql $db_dest --now
+else
+	echo "INFO: PostgreSQL server is already installed."
+fi
+
+echo "INFO: Creating database on PostgreSQL data server..."
+$(dirname $0)/run-sbin $db_dest psql-create-db \
+	"$sql_friendly_name" "'$db_password_escaped'" $app_host
+test $? != 0 \
+	&& >&2 echo "ERROR: Failed to create database and user for '$sql_friendly_name'." \
+	&& exit 1
+
+echo "INFO: Creating test database on PostgreSQL data server..."
+$(dirname $0)/run-sbin $db_dest psql-create-db \
+	"${sql_friendly_name}_test" "$'db_password_escaped'" $app_host
+test $? != 0 \
+	&& >&2 echo "ERROR: Failed to create database and user for '${sql_friendly_name}_test'." \
+	&& exit 1
+
+echo "Success!"
+
+
+## Transfer values for PostgreSQL database connection credentials to web app server
+echo "INFO: Transfer PostgreSQL database connection credentials to web app server"
+ssh $app_dest "
+	if [[ ! -d ~/.credentials ]]; then
+		mkdir -vp ~/.credentials
+		chmod -v 700 ~/.credentials
+	fi
+	if [[ ! -d ~/.credentials/psql ]]; then
+		mkdir -vp ~/.credentials/psql
+		chmod -v 700 ~/.credentials/psql
+	fi
+	echo \"INFO: Saving credentials for database to file: '~/.credentials/psql/$db_name'\"
+	cat >> ~/.credentials/psql/$db_name <<-EOF
+		# Credentials for PostgreSQL server
+		db_host=$db_host
+		db_name=$db_name
+		db_user=$db_user
+		db_password='$db_password_escaped'
+		EOF
+	"
+
+
+if [[ $db_host != $app_host ]]; then
+	echo "INFO: Allow PostgreSQL client connections from private IP address of web app server"
+	ssh $db_dest "sudo firewall-add-rule $psql_port $app_host"
+fi
+
+
+## Confirm that we can query PostgreSQL database server from app server
+echo "INFO: Checking status of connection to PostgreSQL data server from web app server..."
+remote_command="
+	source ~/.credentials/psql/$db_name
+	export PGPASSWORD=\$db_password
+	psql "
+if [[ $db_host != "$app_host" ]]; then
+	remote_command+="-h$db_host "
+fi
+remote_command+="-U\$db_user \$db_name -xc \"
+		select * from pg_stat_activity where datname = '\$db_name';
+		\" 2>/tmp/psql-error--$website_name \
+		| tail -n +1
+	if test \$? != 0; then
+		>&2 cat /tmp/psql-error--$website_name \
+		exit 1
+	fi
+	"
+ssh $app_dest "$remote_command" || exit 1
+
+echo "Success!"
+
+
+## Run setup script on remote server
+echo "INFO [$(date)]: Deploying cronjob script to set up Django web app on server... 🚀"
+$(dirname $0)/setup-web django $website_name $app_dest
+

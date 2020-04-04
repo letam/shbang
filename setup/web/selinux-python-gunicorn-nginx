@@ -297,10 +297,70 @@ add_policy_files_generated_from_audit2allow() {
 	allow init_t httpd_sys_content_t:file { setattr unlink };
 	EOF
 
+
 	echo "Set SE bool to address: SELinux is preventing gunicorn from map access on the file /var/www/$domain/venv/lib/python$python_version/site-packages/meinheld/server.cpython-$(tr -d "." <<< $python_version)-x86_64-linux-gnu.so"
 	#* If you want to allow any process to mmap any file on system with attribute file_type.
 	#* (Needed for Meinheld server)
 	sudo setsebool -P domain_can_mmap_files 1
+
+
+	sql_friendly_name=$(tr "." "_" <<< $domain)
+	echo "Add policy for: SELinux is preventing /usr/local/bin/python$python_version from read access on the file $sql_friendly_name"
+	#* type=AVC msg=audit(1585973033.141:43569): avc:  denied  { read } for  pid=26829 comm="gunicorn" name="te1_blar_app" dev="vda1" ino=41996283 scontext=system_u:system_r:init_t:s0 tcontext=unconfined_u:object_r:user_home_t:s0 tclass=file permissive=0
+	#* type=SYSCALL msg=audit(1585973033.141:43569): arch=x86_64 syscall=openat success=no exit=EACCES a0=ffffff9c a1=7f9d06a0ae10 a2=80000 a3=0 items=0 ppid=26807 pid=26829 auid=4294967295 uid=1001 gid=4 euid=1001 suid=1001 fsuid=1001 egid=4 sgid=4 fsgid=4 tty=(none) ses=4294967295 comm=gunicorn exe=/usr/local/bin/python3.8 subj=system_u:system_r:init_t:s0 key=(null)
+
+	sudo tee $dir/gunicorn-read-file-user-home.te >/dev/null <<-"EOF"
+	module gunicorn-read-file-user-home 1.0;
+
+	require {
+		type init_t;
+		type user_home_t;
+		class file read;
+	}
+
+	#============= init_t ==============
+	allow init_t user_home_t:file read;
+	EOF
+
+	echo "Add policy for: SELinux is preventing /usr/local/bin/python$python_version from open access on the file /home/$SUDO_USER/.credentials/psql/$sql_friendly_name"
+	#* type=AVC msg=audit(1585975044.327:44578): avc:  denied  { open } for  pid=29040 comm="gunicorn" path="/home/cronos/.credentials/psql/te1_blar_app" dev="vda1" ino=41947776 scontext=system_u:system_r:init_t:s0 tcontext=unconfined_u:object_r:user_home_t:s0 tclass=file permissive=0
+	#* type=SYSCALL msg=audit(1585975044.327:44578): arch=x86_64 syscall=openat success=no exit=EACCES a0=ffffff9c a1=7f0025256e60 a2=80000 a3=0 items=0 ppid=29032 pid=29040 auid=4294967295 uid=1001 gid=4 euid=1001 suid=1001 fsuid=1001 egid=4 sgid=4 fsgid=4 tty=(none) ses=4294967295 comm=gunicorn exe=/usr/local/bin/python3.8 subj=system_u:system_r:init_t:s0 key=(null)
+
+	sudo tee $dir/python-open_read-file-user-home.te >/dev/null <<-"EOF"
+	module python-open_read-file-user-home 1.0;
+
+	require {
+		type user_home_t;
+		type init_t;
+		class file { open read };
+	}
+
+	#============= init_t ==============
+
+	#!!!! This avc is allowed in the current policy
+	allow init_t user_home_t:file read;
+	allow init_t user_home_t:file open;
+	EOF
+
+	echo "Add policy for: SELinux is preventing /usr/local/bin/python$python_version from ioctl access on the file /home/$SUDO_USER/.credentials/psql/$sql_friendly_name"
+	#* type=AVC msg=audit(1585975645.163:44696): avc:  denied  { ioctl } for  pid=29226 comm="gunicorn" path="/home/cronos/.credentials/psql/te1_blar_app" dev="vda1" ino=41947776 ioctlcmd=0x5401 scontext=system_u:system_r:init_t:s0 tcontext=unconfined_u:object_r:user_home_t:s0 tclass=file permissive=0
+	#* type=SYSCALL msg=audit(1585975645.163:44696): arch=x86_64 syscall=ioctl success=no exit=EACCES a0=c a1=5401 a2=7ffd17f84690 a3=7 items=0 ppid=29221 pid=29226 auid=4294967295 uid=1001 gid=4 euid=1001 suid=1001 fsuid=1001 egid=4 sgid=4 fsgid=4 tty=(none) ses=4294967295 comm=gunicorn exe=/usr/local/bin/python3.8 subj=system_u:system_r:init_t:s0 key=(null)
+
+	sudo tee $dir/python-ioctl_open_read-user-home.te >/dev/null <<-"EOF"
+	module python-ioctl_open_read-user-home 1.0;
+
+	require {
+		type init_t;
+		type user_home_t;
+		class file { ioctl open read };
+	}
+
+	#============= init_t ==============
+	allow init_t user_home_t:file ioctl;
+
+	#!!!! This avc is allowed in the current policy
+	allow init_t user_home_t:file { open read };
+	EOF
 
 }
 echo "INFO:  Writing SELinux policy files provided by audit2allow..."

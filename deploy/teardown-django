@@ -1,0 +1,118 @@
+#!/usr/bin/env bash
+
+# Remotely teardown Django web app, along with its PostgreSQL database and user
+
+[[ $# -lt 2 || $# -gt 3 ]] && >&2 echo "Usage: $0 WEBSITE_NAME APP_DEST [DB_DEST]" && exit 1
+
+website_name="$1" ; shift
+app_dest="$1" ; shift
+db_dest="$1" ; shift
+[[ $db_dest = "" ]] && db_dest=$app_dest
+
+psql_port=5432
+
+
+echo "INFO [$(date)]: Begin teardown of Django web app and its PostgreSQL database..."
+
+
+## Get values for server hosts
+if [[ $db_dest != $app_dest ]]; then
+	### Get private IP address values of app server and data server
+	app_host=$(ssh $app_dest "private-ip" | cut -f1 -d/)
+	if [[ $app_dest = "" ]]; then
+		>&2 echo "Error: Cannot retrieve private IP of Django web app server."
+		exit 1
+	fi
+	db_host=$(ssh $db_dest "private-ip" | cut -f1 -d/)
+	if [[ $db_dest = "" ]]; then
+		>&2 echo "Error: Cannot retrieve private IP of PostgreSQL data server."
+		exit 1
+	fi
+else
+	app_host=localhost
+	db_host=localhost
+fi
+
+
+### Assemble names
+sql_friendly_name=$(echo $website_name | tr "." "_")
+db_name="$sql_friendly_name"
+db_user="$db_name"
+
+
+# Remove Django web app from web app server
+ssh $app_dest "
+	if sudo rm /etc/nginx/sites-enabled/$website_name; then
+		sudo systemctl reload nginx
+	fi
+
+	sudo systemctl disable --now $website_name-gunicorn.socket
+	sudo rm /etc/systemd/system/$website_name-gunicorn.*
+
+	sudo rm ~/.credentials/psql/$db_name
+	sudo rm -rf /var/www/$website_name
+	"
+
+## Drop database on PostgreSQL server
+echo "INFO: Dropping database on PostgreSQL server..."
+
+ssh $db_dest "
+	sudo -i -u postgres psql -c \"
+		DROP USER $db_user;
+		\"
+	sudo -i -u postgres psql -c \"
+		DROP DATABASE $db_name;
+		\"
+
+	### Confirm database is gone
+	if sudo -i -u postgres psql -c '\\l' | grep -q ' $db_name\\s*|'; then
+		>&2 echo 'Error: Database '$db_name' still exists.'
+		exit 1
+	fi
+	echo 'INFO: Confirmed that database '$db_name' does not exist.'
+
+	### Confirm that user is gone
+	if sudo -i -u postgres psql -c '\\du' | grep -q ' $db_name\\s*|'; then
+		>&2 echo 'Error: User still exists.'
+		exit 1
+	fi
+	echo 'INFO: Confirmed that user '$db_user' does not exist.'
+
+	## Remove user from pg_hba.conf
+	pgsql_version=\$(sudo -u postgres ls /var/lib/pgsql | sort -V | tail -1)
+	auth_conf=/var/lib/pgsql/\$pgsql_version/data/pg_hba.conf
+	backup=\$auth_conf.bak.\$(tmst)
+	sudo cp -p \$auth_conf \$backup
+
+	rule=\"local	$db_name	$db_user			scram-sha-256\"
+	sudo sed -i \"/\$rule/d\" \$auth_conf
+
+	if [ "$app_host" != localhost ]; then
+		rule=\"host	$db_name	$db_user	$app_host\/32	scram-sha-256\"
+		sudo sed -i \"/\$rule/d\" \$auth_conf
+	fi
+
+	### Reload config settings
+	if [[ \$(sudo diff \$auth_conf \$backup) != '' ]]; then
+		sudo -i -u postgres psql -c 'SELECT pg_reload_conf();' >/dev/null
+	fi
+	sudo rm \$backup
+	"
+
+### Alternatively:
+#$(dirname $0)/run-sbin $db_dest psql-drop-db $db_name $app_host
+
+## Drop test database
+$(dirname $0)/run-sbin $db_dest psql-drop-db ${db_name}_test $app_host
+
+echo "Success!"
+
+
+#* Do not remove firewall rule for this client-server port connection, in case there are other active connections
+#if [[ $db_dest != $app_dest ]]; then
+#    echo "INFO: Remove PostgreSQL client connections from private IP address of web app server"
+#    ssh $db_dest "sudo firewall-remove-rule $psql_port $app_host"
+#fi
+
+echo "INFO [$(date)]: Done! 💥"
+

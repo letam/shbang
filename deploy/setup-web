@@ -19,10 +19,11 @@ $(dirname $0)/../sbin/cp-app-files . $dest:/opt/orc
 
 
 ## Transfer Let's Encrypt directory for website if found
-if [[ -f $website_name-letsencrypt.tgz ]] && \
+cert_archive=~/cert-archive/$website_name-letsencrypt.tgz
+if [[ -f $cert_archive ]] && \
 	! ssh $dest "[[ -d /etc/letsencrypt ]]"
 then
-	$(dirname $0)/upload-letsencrypt $dest $website_name-letsencrypt.tgz
+	$(dirname $0)/upload-letsencrypt $dest $cert_archive
 	[[ $? != 0 ]] && exit 1 || echo
 fi
 

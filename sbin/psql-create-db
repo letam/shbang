@@ -4,7 +4,7 @@
 
 [[ $(id -u) != 0 ]] && >&2 echo "Error: Must be run as sudo/root." && exit 1
 
-[[ $# < 2 || $# > 4 ]] && >&2 echo "Usage: $0 DBNAME PASSWORD [USER_HOST]" && exit 1
+[[ $# < 2 || $# > 4 ]] && >&2 echo "Usage: $0 DBNAME PASSWORD [CLIENT_HOST]" && exit 1
 
 pgsql_version=$(sudo -u postgres ls /var/lib/pgsql | sort -V | tail -1)
 
@@ -33,10 +33,16 @@ sudo -i -u postgres psql -c "
 ### Insert sert new authentication rule for user to access database
 auth_conf=/var/lib/pgsql/$pgsql_version/data/pg_hba.conf
 echo "Update PostgreSQL host auth configuration file '$auth_conf'"
-sudo bak $auth_conf >/dev/null
-rule="local	$dbname	$username	$host	scram-sha-256"
+
+rule="local	$dbname	$username			scram-sha-256"
 echo "- Inserting rule: '$rule'"
 sudo sed -i -E "s/(^local\s+all\s+all\s+peer$)/$rule\n\1/" $auth_conf
+
+if [[ $host != "" && $host != localhost ]]; then
+	rule="host	$dbname	$username	$host/32	scram-sha-256"
+	echo "- Inserting rule: '$rule'"
+	sudo sed -i -E "s/(^host\s+all\s+all\s+127\.0\.0\.1\/32\s+ident$)/$rule\n\1/" $auth_conf
+fi
 
 ### Reload config settings
 echo "Reload PostgreSQL server conf via: 'SELECT pg_reload_conf();'"

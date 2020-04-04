@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Set up Django web server with SQLite DB and serve with Gunicorn and Nginx
+# Set up Django web server with SQLite database and serve with Gunicorn and Nginx
 
 
 [[ $(id -u) != 0 ]] && echo "Error: Must be run as sudo/root." && exit 1
@@ -72,7 +72,7 @@ nginx_conf=/var/www/$domain/nginx.conf
 
 
 # Set up HTML website first
-$(dirname $0)/html $domain
+$(dirname $0)/html $domain || exit 1
 
 
 # Setup Django web application
@@ -83,11 +83,12 @@ cd $project_dir
 python -m venv venv
 source venv/bin/activate
 pip install --upgrade pip setuptools
-pip install Django gunicorn meinheld
+pip install Django dj-database-url gunicorn meinheld
 
 ## Create requirements.txt file
 pip list | grep -E "(\
 Django |\
+dj-database-url |\
 gunicorn |\
 meinheld \
 )" | tr -s " " | sed "s/ /==/" > requirements.txt
@@ -120,6 +121,47 @@ MEDIA_URL = "/uploads/"
 ALLOWED_HOSTS = ["$domain"]
 
 EOF
+
+sql_friendly_name=$(echo $domain | tr "." "_")
+psql_credentials_file=/home/$SUDO_USER/.credentials/psql/$sql_friendly_name
+if [[ -f $psql_credentials_file ]]; then
+	echo "Credentials found for PostgreSQL database server connection found."
+	echo "Proceeding to set up PostgreSQL connection..."
+
+	### Install Development files for building PostgreSQL client tools
+	sudo dnf install -y libpq-devel
+
+	### Install PostgreSQL adapter for Python and update requirements.txt
+	pip install psycopg2
+	pip list | grep "psycopg2 " | tr -s " " | sed "s/ /==/" >> requirements.txt
+
+	cat >> server/config/settings_production.py <<EOF
+
+import dj_database_url
+
+with open("$psql_credentials_file") as fd:
+	credentials = {
+		var: val.rstrip("\n")
+		for var, val in [
+			line.split("=", 1) for line in fd if "=" in line
+		]
+	}
+
+db_user = credentials["db_user"]
+db_password = credentials["db_password"].strip("'")
+db_host = credentials["db_host"]
+db_name = credentials["db_name"]
+
+if db_host == "localhost":
+	db_host = ""
+
+DATABASES["default"] = dj_database_url.parse(
+	f"postgres://{db_user}:{db_password}@{db_host}/{db_name}"
+)
+
+EOF
+	# TODO: Add settings for test database
+fi
 
 #### Add directory for uploads
 mkdir -v $project_dir/uploads
