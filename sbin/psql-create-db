@@ -39,7 +39,7 @@ echo "- Inserting rule: '$rule'"
 sudo sed -i -E "s/(^local\s+all\s+all\s+peer$)/$rule\n\1/" $auth_conf
 
 if [[ $host != "" && $host != localhost ]]; then
-	rule="host	$dbname	$username	$host/32	scram-sha-256"
+	rule="host	$dbname	$username	$host\/32	scram-sha-256"
 	echo "- Inserting rule: '$rule'"
 	sudo sed -i -E "s/(^host\s+all\s+all\s+127\.0\.0\.1\/32\s+ident$)/$rule\n\1/" $auth_conf
 fi
