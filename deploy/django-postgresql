@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 
-# Remotely set up Django web app, connecting it to local PostgreSQL server
-# TODO: Complete implementation for setup for remote database server
+# Remotely set up Django web app, connecting to external or local PostgreSQL data server
 
 [[ $# -lt 2 || $# -gt 3 ]] && >&2 echo "Usage: $0 WEBSITE_NAME APP_DEST [DB_DEST]" && exit 1
 
@@ -104,6 +103,7 @@ ssh $app_dest "
 if [[ $db_host != $app_host ]]; then
 	echo "INFO: Allow PostgreSQL client connections from private IP address of web app server"
 	ssh $db_dest "sudo firewall-add-rule $psql_port $app_host"
+	$(dirname $0)/psql-ssl-certificates $website_name $db_dest $app_dest
 fi
 
 
