@@ -58,25 +58,22 @@ echo "INFO: Dropping database on PostgreSQL server..."
 
 ssh $db_dest "
 	sudo -i -u postgres psql -c \"
-		DROP USER $db_user;
-		\"
-	sudo -i -u postgres psql -c \"
 		DROP DATABASE $db_name;
 		\"
-
 	### Confirm database is gone
 	if sudo -i -u postgres psql -c '\\l' | grep -q ' $db_name\\s*|'; then
 		>&2 echo 'Error: Database '$db_name' still exists.'
 		exit 1
 	fi
-	echo 'INFO: Confirmed that database '$db_name' does not exist.'
 
+	sudo -i -u postgres psql -c \"
+		DROP USER $db_user;
+		\"
 	### Confirm that user is gone
 	if sudo -i -u postgres psql -c '\\du' | grep -q ' $db_name\\s*|'; then
 		>&2 echo 'Error: User still exists.'
 		exit 1
 	fi
-	echo 'INFO: Confirmed that user '$db_user' does not exist.'
 
 	## Remove user from pg_hba.conf
 	pgsql_version=\$(sudo -u postgres ls /var/lib/pgsql | sort -V | tail -1)
@@ -97,13 +94,14 @@ ssh $db_dest "
 		sudo -i -u postgres psql -c 'SELECT pg_reload_conf();' >/dev/null
 	fi
 	sudo rm \$backup
-	"
+	" || exit 1
 
 ### Alternatively:
 #$(dirname $0)/run-sbin $db_dest psql-drop-db $db_name $app_host
 
 ## Drop test database
-$(dirname $0)/run-sbin $db_dest psql-drop-db ${db_name}_test $app_host
+$(dirname $0)/run-sbin $db_dest psql-drop-db ${db_name}_test $app_host \
+	|| exit 1
 
 echo "Success!"
 
