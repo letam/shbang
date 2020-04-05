@@ -138,6 +138,7 @@ if [[ -f $psql_credentials_file ]]; then
 	cat >> server/config/settings_production.py <<EOF
 
 import dj_database_url
+import urllib.parse
 
 with open("$psql_credentials_file") as fd:
 	credentials = {
@@ -147,8 +148,14 @@ with open("$psql_credentials_file") as fd:
 		]
 	}
 
+# Encode every special character in value, for use in URLs
+for k, v in credentials.items():
+	if k in ["db_password"]:
+		v = v.strip("'")
+	credentials[k] = urllib.parse.quote(v)
+
 db_user = credentials["db_user"]
-db_password = credentials["db_password"].strip("'")
+db_password = credentials["db_password"]
 db_host = credentials["db_host"]
 db_name = credentials["db_name"]
 
