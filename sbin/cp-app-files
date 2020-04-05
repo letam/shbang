@@ -47,9 +47,9 @@ fi
 if [[ $dest =~ ":" ]]; then
 	echo "INFO [$(date)]: Will copy files to remote server '$remote'."
 	ssh $remote "
-	[[ ! -d $dir ]] && sudo mkdir -vp $dir
-	[[ \$(stat -c %U $dir) != \$USER ]] && sudo chown -v \$USER:\$USER $dir
-	"
+		[[ ! -d $dir ]] && sudo mkdir -vp $dir
+		[[ \$(stat -c %U $dir) != \$USER ]] && sudo chown -v \$USER:\$USER $dir
+		"
 else
 	echo "INFO [$(date)]: Will copy files to localhost."
 	[[ ! -d $dest ]] && mkdir -vp $dest
