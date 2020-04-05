@@ -18,8 +18,9 @@ host=$(cut -f2 -d@ <<< $dest)
 echo "Installing some tools..." && \
 	ssh $dest "
 		if command -v dnf >/dev/null; then
-			sudo dnf install -y git vim
+			sudo dnf install -y git vim python3
 		fi
+		sudo ln -vs \$(which python3) /usr/bin/python
 		"
 
 
@@ -35,3 +36,10 @@ echo "Transferring files..." && \
 	cp-app-files ~/cert-archives $dest: && \
 	cp-app-files . $dest:/opt/orc
 
+
+echo "Set up some stuff..." && \
+	ssh $dest "/opt/orc/setup/cli/bash"
+
+test $? != 0 && >&2 echo "Error!" && exit 1
+
+echo "Done!"
