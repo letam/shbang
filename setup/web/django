@@ -201,18 +201,20 @@ manage() {
 
 manage migrate
 manage collectstatic --noinput
+
 # Restore SELinux context of files (default file label should be httpd_sys_content_t)
-echo "BEGIN: Relabel files..."
-#echo "Relabel venv/lib/python$python_version/site-packages and all its contents from unconfined_u:object_r:var_t:s0 to unconfined_u:object_r:httpd_sys_content_t:s0"
-/sbin/restorecon -v -R venv/lib/python$python_version/site-packages
-/sbin/restorecon -v -R server
-/sbin/restorecon -v -R static
-/sbin/restorecon -v -R uploads
+echo "Relabel venv/lib/python$python_version/site-packages and all its contents from unconfined_u:object_r:var_t:s0 to unconfined_u:object_r:httpd_sys_content_t:s0"
+/sbin/restorecon -R venv/lib/python$python_version/site-packages
+echo "Relabel server/* from unconfined_u:object_r:var_t:s0 to unconfined_u:object_r:httpd_sys_content_t:s0"
+/sbin/restorecon -R server
+echo "Relabel static/* from unconfined_u:object_r:var_t:s0 to unconfined_u:object_r:httpd_sys_content_t:s0"
+/sbin/restorecon -R static
+echo "Relabel uploads/* from unconfined_u:object_r:var_t:s0 to unconfined_u:object_r:httpd_sys_content_t:s0"
+/sbin/restorecon -R uploads
 /sbin/restorecon -v secret_key.txt
 /sbin/restorecon -v venv/pyvenv.cfg
 /sbin/restorecon -v venv/bin/gunicorn
 /sbin/restorecon -v nginx.conf
-echo "END: Relabel files!"
 
 EOF
 chmod +x build-prod
@@ -221,17 +223,20 @@ chmod +x build-prod
 ### Run management commands to build project for production for the first/inital time
 ./manage-prod migrate
 ./manage-prod collectstatic --noinput
+
 # Restore SELinux context of files (default file label should be httpd_sys_content_t)
-echo "BEGIN: Relabel files..."
-/sbin/restorecon -v -R venv/lib/python$python_version/site-packages
-/sbin/restorecon -v -R server
-/sbin/restorecon -v -R static
-/sbin/restorecon -v -R uploads
+echo "Relabel venv/lib/python$python_version/site-packages and all its contents from unconfined_u:object_r:var_t:s0 to unconfined_u:object_r:httpd_sys_content_t:s0"
+/sbin/restorecon -R venv/lib/python$python_version/site-packages
+echo "Relabel server/* from unconfined_u:object_r:var_t:s0 to unconfined_u:object_r:httpd_sys_content_t:s0"
+/sbin/restorecon -R server
+echo "Relabel static/* from unconfined_u:object_r:var_t:s0 to unconfined_u:object_r:httpd_sys_content_t:s0"
+/sbin/restorecon -R static
+echo "Relabel uploads/* from unconfined_u:object_r:var_t:s0 to unconfined_u:object_r:httpd_sys_content_t:s0"
+/sbin/restorecon -R uploads
 /sbin/restorecon -v secret_key.txt
 /sbin/restorecon -v venv/pyvenv.cfg
 /sbin/restorecon -v venv/bin/gunicorn
 /sbin/restorecon -v nginx.conf
-echo "END: Relabel files!"
 
 
 cd - >/dev/null
