@@ -21,14 +21,21 @@ cd ~/certs/$hostname
 ssh $server "mkdir -vp ~/certs/$hostname"
 scp -p server.key server.crt $server:~/certs/$hostname
 ssh $server "
+	# TODO: Check if server key already exists
+	# TODO: Check if server key/cert needs to be replaced
+
+	echo \"Install 'server.key' and 'server.crt' for PostgreSQL server.\"
 	pgdata=\$(sudo -i -u postgres psql -t -c 'SHOW data_directory')
 	sudo cp -vp -t \$pgdata ~/certs/$hostname/server.{key,crt}
 	sudo chown postgres \$pgdata/server.key
+
 	pgsql_version=\$(sudo -i -u postgres psql -c '\\echo :VERSION' \
 		| cut -f2 -d' ' | cut -f1 -d.)
-	sudo bak \$pgdata/postgresql.conf
-	echo 'Set up SSL settings for server.'
-	sudo sed -i -E 's/(#ssl =.*)/\\1\\nssl = on/' \$pgdata/postgresql.conf
+	if ! sudo grep -q '^ssl = on' \$pgdata/postgresql.conf; then
+		sudo bak \$pgdata/postgresql.conf
+		echo \"Enable SSL on server.\"
+		sudo sed -i -E 's/(#ssl =.*)/\\1\\nssl = on/' \$pgdata/postgresql.conf
+	fi
 	sudo systemctl restart postgresql-\$pgsql_version
 	"
 
