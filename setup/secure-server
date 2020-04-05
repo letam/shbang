@@ -4,7 +4,6 @@
 # - sets up log directories for system setup and stats
 # - enables firewall allowing only SSH connections
 # - enables automatic security updates to system
-# - sets update script to be executed as a cronjob at the next minute
 # - writes SSH authorized keys if provided, and then disables SSH password auth
 # - creates sudo user with authorized keys, if spcified
 # - disables SSH login as root user if another user is present
@@ -190,15 +189,6 @@ if is_centos; then
 	fi
 	sudo systemctl enable --now dnf-automatic.timer
 fi
-
-
-# Add cronjob so that server will execute next setup script on its own
-backup_file /etc/crontab
-echo "INFO: Set cronjob so that the next setup script will run at the next minute."
-echo "* *	* * *	root	bash /usr/local/setup/update-server \
-	>> /var/log/setup/update-server 2>&1 \
-	# initial setup script ; remove_immediately" \
-	| sudo tee -a /etc/crontab >/dev/null
 
 
 # Log time of script end

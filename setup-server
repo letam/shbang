@@ -14,6 +14,7 @@ while [[ $# -gt 0 ]]; do
 		-k|--authorized_keys) authorized_keys="$2"; shift; shift;;
 		-p|--port) port="$2"; shift; shift;;
 		-n|--new_user) new_user="$2"; shift; shift;;
+		--update) should_update=y; shift;;
 		-*|*) echo "Unknown option: $1" >&2; exit 1;;
 	esac
 done
@@ -169,7 +170,22 @@ sudo bash /usr/local/setup/secure-server \
 	-u \"\$user\" \
 	-n \"\$new_user\" \
 	2>&1 | sudo tee /var/log/setup/secure-server
+"
 
+### Enqueue update script if requested via option
+if [[ $should_update != "" ]]; then
+	command+="
+	# Add cronjob so that server will execute next setup script on its own
+	echo 'INFO: Set cronjob so that the update script will run at the next minute.'
+	echo '* *	* * *	root	bash /usr/local/setup/update-server \
+		>> /var/log/setup/update-server 2>&1 \
+		# initial setup script ; remove_immediately \
+		' | sudo tee -a /etc/crontab >/dev/null
+	"
+fi
+
+### End command
+command+="
 echo \"INFO [\$(date)]: End SSH command.\"
 "
 
