@@ -2,12 +2,20 @@
 
 # Install program, from script in setup/install, on remote server
 
-[[ $# < 2 || $# > 3 ]] && >&2 echo "Usage: $0 PROGRAM_NAME DEST [NOW]" && exit 1
-
+usage() {
+	>&2 echo "Usage: $0 PROGRAM_NAME DEST [--now]"
+	exit 1
+}
+argc=$#
+(( argc < 2 || argc > 3 )) && usage
 
 program_name="$1" ; shift
 dest="$1" ; shift
 now="$1" ; shift
+if [[ $now != "" && $now != "--now" ]]; then
+	>&2 echo "Unrecognized argument '$now'."
+	usage
+fi
 
 dest_user=$(sed -E "s/(.*)@.*/\1/" <<< $dest)
 

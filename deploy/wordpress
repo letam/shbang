@@ -2,12 +2,27 @@
 
 # Remotely set up Wordpress website, connecting it to (external) MySQL server
 
-[[ $# -lt 2 || $# -gt 3 ]] && >&2 echo "Usage: $0 WEBSITE_NAME WP_DEST [DB_DEST]" && exit 1
+usage() {
+	>&2 echo "Usage: $0 WEBSITE_NAME WP_DEST [DB_DEST]"
+	exit 1
+}
+argc=$#
+(( argc < 2 || argc > 3 )) && usage
 
 website_name="$1" ; shift
 wp_dest="$1" ; shift
 db_dest="$1" ; shift
 [[ $db_dest = "" ]] && db_dest=$wp_dest
+
+sbin=$(dirname $0)/../sbin
+
+[[ $website_name =~ @ ]] \
+	&& >&2 echo "Invalid website name." && usage
+! $sbin/is-valid-connection-value $wp_dest \
+	&& >&2 echo "Invalid connection value for Wordpress server." && usage
+! $sbin/is-valid-connection-value $db_dest \
+	&& >&2 echo "Invalid connection value for database server." && usage
+
 
 mysql_port=3306
 
