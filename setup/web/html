@@ -106,7 +106,8 @@ sudo /sbin/restorecon -v $project_dir/nginx.conf
 ### Add SELinux label to allow Nginx to access all files in project directory
 #* Deals with: SELinux is preventing /usr/sbin/nginx from getattr access on the file $project_dir/html/index.html.
 #* $project_dir/html/index.html default label should be httpd_sys_content_t.
-sudo /sbin/restorecon -v $project_dir/html/* -R
+echo "Relabel $project_dir/html/* from unconfined_u:object_r:var_t:s0 to unconfined_u:object_r:httpd_sys_content_t:s0"
+sudo /sbin/restorecon -R $project_dir/html/*
 # TODO: Update (fine-tune) the labeling to apply only to HTML, CSS, JS, media
 
 
