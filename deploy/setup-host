@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+
+# Prepare a new host by running initial setup and copying relavant files
+
+[[ $# != 1 ]] && >&2 echo "Usage: $0 DEST" && exit 1
+
+
+dest=$1
+
+user=$(cut -f1 -d@ <<< $dest)
+host=$(cut -f2 -d@ <<< $dest)
+
+
+./setup-server -h $host -n $user -k "$(cat ~/.credentials/authorized_keys)" || \
+	./setup-server -u $user -h $host -n $user -k "$(cat ~/.credentials/authorized_keys)"
+
+
+echo "Installing some tools..." && \
+	ssh $dest "
+		if command -v dnf >/dev/null; then
+			sudo dnf install -y git vim
+		fi
+		"
+
+
+echo "Transferring SSH keys..."
+scp -p ~/.ssh/id_rsa $dest: && ssh $dest "mv id_rsa .ssh"
+[[ -f ~/.ssh/id_rsa_nopp ]] && \
+	scp -p ~/.ssh/id_rsa_nopp $dest: && ssh $dest "mv id_rsa_nopp .ssh"
+
+
+echo "Transferring files..." && \
+	scp -pr ~/.credentials $dest:.credentials && \
+	ssh $dest "chmod -v 700 ~/.credentials" && \
+	cp-app-files ~/cert-archives $dest: && \
+	cp-app-files . $dest:/opt/orc
+
