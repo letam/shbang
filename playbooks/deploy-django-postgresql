@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+
+# Deploy a Django web app connected to PostgreSQL database server
+
+usage() {
+	>&2 echo "Usage: $0 DEST"
+	exit 1
+}
+argc=$#
+(( argc != 1 )) && usage
+
+
+# Set variables
+
+dest=$1 ; shift
+
+[[ ! $dest =~ @ ]] \
+	&& >&2 echo "Invalid destination. Expected format: \$user@\$host" && exit 1
+
+domain=$(cut -f2 -d@ <<< $dest)
+user=$(cut -f1 -d@ <<< $dest)
+
+
+# Main
+
+./deploy/teardown-django $domain $user@$domain $user@db.$domain && \
+./deploy/django-postgresql $domain $user@$domain $user@db.$domain
+
