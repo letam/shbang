@@ -158,6 +158,6 @@ echo "Success!"
 
 
 ## Run setup script on remote server
-echo "INFO [$(date)]: Deploying cronjob script to set up Wordpress site on server... 🚀"
-$(dirname $0)/setup-web wordpress $website_name $wp_dest
+echo "INFO [$(date)]: Executing script to set up Wordpress site on server... 🚀"
+$(dirname $0)/setup-web wordpress $website_name $wp_dest --now
 

@@ -149,6 +149,6 @@ echo "Success!"
 
 
 ## Run setup script on remote server
-echo "INFO [$(date)]: Deploying cronjob script to set up Django web app on server... 🚀"
-$(dirname $0)/setup-web django $website_name $app_dest
+echo "INFO [$(date)]: Executing script to set up Django web app on server... 🚀"
+$(dirname $0)/setup-web django $website_name $app_dest --now
 

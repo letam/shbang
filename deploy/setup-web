@@ -3,15 +3,20 @@
 # Setup app, from script in setup/web, on remote server
 
 usage() {
-	>&2 echo "Usage: $0 APP_NAME WEBSITE_NAME DEST"
+	>&2 echo "Usage: $0 APP_NAME WEBSITE_NAME DEST [--now]"
 	exit 1
 }
 argc=$#
-(( argc != 3 )) && usage
+(( argc < 3 || argc > 4 )) && usage
 
 app_name="$1" ; shift
 website_name="$1" ; shift
 dest="$1" ; shift
+now="$1" ; shift
+if [[ $now != "" && $now != "--now" ]]; then
+	>&2 echo "Unrecognized argument '$now'."
+	usage
+fi
 
 sbin=$(dirname $0)/../sbin
 
@@ -46,23 +51,33 @@ script_path="setup/web/$app_name"
 log="/var/log/$script_path--$website_name"
 
 command="
+	# Ensure log directory exists
+	[[ ! -d /var/log/setup/web ]] && sudo mkdir -vp /var/log/setup/web
+	"
 
-# Ensure log directory exists
-[[ ! -d /var/log/setup/web ]] && sudo mkdir -vp /var/log/setup/web
+if [[ $now = "" ]]; then
+	command+="
+		echo \"INFO [\$(date)]: Set cronjob so the setup script will run at the next minute.\"
+		sudo bak /etc/crontab >/dev/null
+		echo \"\
+			* *	* * *	$dest_user	\
+			sudo sed -i \\\"\\|$script_path|d\\\" /etc/crontab \
+			&& echo \"Executing cronjob that was scheduled at: $(date)\" \
+			&& echo \"__START__: \$\(date\)\" | sudo tee -a $log >/dev/null \
+			&& sudo /opt/orc/$script_path $website_name 2>&1 | sudo tee -a $log >/dev/null \
+			&& echo \"__END__: \$\(date\)\" | sudo tee -a $log >/dev/null \
+			# IMMEDIATE_EXECUTE_AND_REMOVE \
+			\" | sudo tee -a /etc/crontab >/dev/null
+		"
+else
+	command+="
+		echo \"INFO [\$(date)]: Executing /opt/orc/$script_path $website_name ...\" \
+		&& echo \"__START__: \$(date)\" | sudo tee -a $log \
+		&& sudo /opt/orc/$script_path $website_name 2>&1 | sudo tee -a $log \
+		&& echo \"__END__: \$(date)\" | sudo tee -a $log
+		"
+fi
 
-echo \"INFO [\$(date)]: Set cronjob so the setup script will run at the next minute.\"
-sudo bak /etc/crontab >/dev/null
-echo \"\
-	* *	* * *	$dest_user	\
-	sudo sed -i \\\"\\|$script_path|d\\\" /etc/crontab \
-	&& echo \"Executing cronjob that was scheduled at: $(date)\" \
-	&& echo \"__START__: \$\(date\)\" | sudo tee -a $log >/dev/null \
-	&& sudo /opt/orc/$script_path $website_name 2>&1 | sudo tee -a $log >/dev/null \
-	&& echo \"__END__: \$\(date\)\" | sudo tee -a $log >/dev/null \
-	# IMMEDIATE_EXECUTE_AND_REMOVE \
-	\" | sudo tee -a /etc/crontab >/dev/null
-
-"
 
 ssh $dest "$command"
 
