@@ -18,7 +18,7 @@ host=$(cut -f2 -d@ <<< $dest)
 echo "Installing some tools..." && \
 	ssh $dest "
 		if command -v dnf >/dev/null; then
-			sudo dnf install -y git vim python3
+			sudo dnf install -y git vim tmux python3
 		fi
 		sudo ln -vs \$(which python3) /usr/bin/python
 		"
