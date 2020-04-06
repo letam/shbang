@@ -72,6 +72,11 @@ ssh $app_dest "
 echo "INFO: Dropping database on PostgreSQL server..."
 
 ssh $db_dest "
+	if ! ps aux | grep -q '^postgres '; then
+		>&2 echo 'PostgreSQL server is not installed.'
+		exit
+	fi
+
 	sudo -i -u postgres psql -c \"
 		DROP DATABASE $db_name;
 		\"
@@ -127,5 +132,5 @@ echo "Success!"
 #    ssh $db_dest "sudo firewall-remove-rule $psql_port $app_host"
 #fi
 
-echo "INFO [$(date)]: Done! 💥"
+echo "INFO [$(date)]: ${0##*/} done! 💥"
 

@@ -12,6 +12,12 @@ host=$1 ; shift
 username=$dbname
 
 
+if ! ps aux | grep -q '^postgres '; then
+	>&2 echo 'PostgreSQL server is not installed.'
+	exit
+fi
+
+
 pgsql_version=$(sudo -u postgres ls /var/lib/pgsql | sort -V | tail -1)
 
 
