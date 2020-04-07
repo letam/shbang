@@ -86,7 +86,8 @@ ssh $db_dest "
 	mysql -uroot -p\$mysql_root_pw -e \"
 		CREATE DATABASE $db_name
 			DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-		CREATE USER '$db_user'@'$wordpress_host' IDENTIFIED BY '$db_password_escaped';
+		CREATE USER '$db_user'@'$wordpress_host'
+			IDENTIFIED WITH caching_sha2_password BY '$db_password_escaped';
 		GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, ALTER, INDEX
 			ON $db_name.* TO '$db_user'@'$wordpress_host';
 		FLUSH PRIVILEGES;
