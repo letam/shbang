@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+
+# Restore Digital Ocean droplet to specified image
+
+usage() {
+	>&2 echo "Usage: $0 DROPLET_NAME IMAGE_NAME"
+	exit 1
+}
+argc=$#
+(( argc != 2 )) && usage
+
+droplet_name=$1 ; shift
+image_name=$1 ; shift
+
+
+droplet_id=$(doctl compute droplet list \
+	| tail -n +2 | grep -E -m1 "^[0-9]+\s+$droplet_name\s" | cut -f 1 -d" ")
+test "$droplet_id" = "" && >&2 echo "Droplet not found." && exit 1
+
+
+image_id=$(doctl compute image list --public \
+	| tail -n +2 | tac | grep -E -m1 "^[0-9]+\s+$image_name\s" | cut -f 1 -d" ")
+test "$image_id" = "" && >&2 echo "Image not found." && exit 1
+
+
+echo -n "Confirm restore droplet ID $droplet_id using image ID $image_id (y/n): "
+read -r response
+test ${response:-n} = y || exit
+
+doctl compute droplet-action restore $droplet_id --image-id $image_id
+
