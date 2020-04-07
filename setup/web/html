@@ -60,7 +60,7 @@ sudo mkdir -vp $project_dir
 sudo cp -pr /usr/share/nginx/html $html_dir
 
 ## Create nginx config
-cat /etc/nginx/sites-available/default \
+cat /etc/nginx/conf.d/default.conf \
 	| sed -E "
 		s|([ \t]+listen .*) default_server|\1|;
 		s|(server_name[ \t]+)_|\1$domain|;
