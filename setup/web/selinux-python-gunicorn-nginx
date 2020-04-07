@@ -362,6 +362,25 @@ add_policy_files_generated_from_audit2allow() {
 	allow init_t user_home_t:file { open read };
 	EOF
 
+	echo "Add policy for: SELinux is preventing /usr/local/bin/python$python_version from name_connect access on the tcp_socket port 5432"
+	#* type=AVC msg=audit(1586227558.559:3065): avc:  denied  { name_connect } for  pid=17519 comm="gunicorn" dest=5432 scontext=system_u:system_r:init_t:s0 tcontext=system_u:object_r:postgresql_port_t:s0 tclass=tcp_socket permissive=0
+	#* type=SYSCALL msg=audit(1586227558.559:3065): arch=x86_64 syscall=connect success=no exit=EACCES a0=10 a1=2b5a5c0 a2=10 a3=7ffced336458 items=0 ppid=17517 pid=17519 auid=4294967295 uid=1001 gid=4 euid=1001 suid=1001 fsuid=1001 egid=4 sgid=4 fsgid=4 tty=(none) ses=4294967295 comm=gunicorn exe=/usr/local/bin/python3.8 subj=system_u:system_r:init_t:s0 key=(null)
+
+	sudo tee $dir/python-name_connect-postgresql.te >/dev/null <<-"EOF"
+	module python-name_connect-postgresql 1.0;
+
+	module my-gunicorn 1.0;
+
+	require {
+		type postgresql_port_t;
+		type init_t;
+		class tcp_socket name_connect;
+	}
+
+	#============= init_t ==============
+	allow init_t postgresql_port_t:tcp_socket name_connect;
+	EOF
+
 }
 echo "INFO:  Writing SELinux policy files provided by audit2allow..."
 add_policy_files_generated_from_audit2allow
