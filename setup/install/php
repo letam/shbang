@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Install PHP
+# Install PHP-FPM
 
 [[ $(id -u) != 0 ]] && echo "Error: Must be run as sudo/root." && exit 1
 
@@ -10,10 +10,11 @@ php_version=7.4
 centos_version=8
 
 
-[[ $(command -v php) != "" ]] && >&2 echo "PHP is already installed." && exit 1
+systemctl list-unit-files | grep -q "php[^ ]*-fpm" \
+	&& >&2 echo "PHP-FPM is already installed." && exit 1
 
 
-if [[ $(os-name) = centos ]]; then
+if command -v dnf >/dev/null; then
 	# Source: https://rpms.remirepo.net/wizard/
 
 	# Install the EPEL repository configuration package:
@@ -44,43 +45,107 @@ if [[ $(os-name) = centos ]]; then
 	# Check the installed version and available extensions:
 	php --version
 	php --modules
+
+elif command -v apt >/dev/null; then
+	# Set to use ondrej/php repository for latest version
+	#* Source: https://launchpad.net/~ondrej/+archive/ubuntu/php/
+	apt install software-properties-common
+	add-apt-repository -y ppa:ondrej/php
+	apt update
+
+	# Install latest PHP-FPM
+	apt install -y php-fpm
+	# Install additional packages
+	apt install -y php-mbstring
+
+fi
+
+# Get name of service on system
+service_name=$(systemctl list-unit-files | grep -m1 "php[^ ]*-fpm" -o)
+
+# Enable or reload systemd service
+if ! systemctl list-unit-files --state=enabled | grep -q $service_name \
+	|| ! systemctl is-active $service_name
+then
+	systemctl enable --now $service_name
+else
+	systemctl reload $service_name
+fi
+systemctl status -l --no-pager $service_name
+
+
+# Ensure log(s) is under the "adm" group for good read access
+if [[ -f /var/log/$service_name.log ]]; then
+	chown -v :adm /var/log/$service_name.log
+	chmod -v g=r /var/log/$service_name.log
+else
+	log_dir=/var/log/php-fpm
+	chdirgroup "$log_dir" adm
+	if [[ $(ls "$log_dir" | wc -l) != 0 ]]; then
+		chmod -v -R g+r "$log_dir"/*
+	fi
 fi
 
 
-# Enable systemd service
-if ! systemctl list-unit-files --state=enabled | grep -q php-fpm; then
-	systemctl enable --now php-fpm
-fi
-systemctl status -l --no-pager php-fpm
-
-
-# Ensure the log directory is part of the "adm" group for good read access
-log_dir=/var/log/php-fpm
-chdirgroup "$log_dir" adm
-if [[ $(ls "$log_dir" | wc -l) != 0 ]]; then
-	chmod -v -R g+r "$log_dir"/*
+php_fpm_www_conf=/etc/php-fpm.d/www.conf
+if [[ ! -f $php_fpm_www_conf ]]; then
+    php_fpm_www_conf=/etc/php/$php_version/fpm/pool.d/www.conf
 fi
 
 
 # Ensure existence of PHP socket configuration for Nginx server blocks
+echo "Creating /etc/nginx/conf.d/php-fpm.conf..."
 [[ ! -d /etc/nginx/conf.d ]] && mkdir -vp /etc/nginx/conf.d
-if [[ -d /etc/nginx/conf.d && ! -f /etc/nginx/conf.d/php-fpm.conf ]]; then
-	echo "Creating /etc/nginx/conf.d/php-fpm.conf..."
-	sudo tee /etc/nginx/conf.d/php-fpm.conf >/dev/null <<"EOF"
+[[ -f /etc/nginx/conf.d/php-fpm.conf ]] && bak /etc/nginx/conf.d/php-fpm.conf
+
+php_fpm_socket=$(grep -m1 "^listen = .*$" $php_fpm_www_conf | sed -E "s|listen = (.*)$|\1|")
+if [[ $php_fpm_socket =~ ^/ ]]; then
+	php_fpm_socket="unix:$php_fpm_socket"
+fi
+
+cat > /etc/nginx/conf.d/php-fpm.conf <<EOF
 # PHP-FPM FastCGI server
 # network or unix domain socket configuration
 
 upstream php-fpm {
-    server unix:/run/php-fpm/www.sock;
+    server $php_fpm_socket;
 }
 EOF
+
+
+##* To use TCP socket connection, uncomment the following block
+## Configure PHP-FPM to use TCP/IP socket connection
+#(
+#    bak "$php_fpm_www_conf"
+#    socket=127.0.0.1:9000
+#    ##	Update PHP-FPM www.conf to use TCP socket connection
+#    if ! grep -q "listen = $socket" "$php_fpm_www_conf"; then
+#        sed -i -E "s|^(listen = .*)$|;\1\nlisten = $socket|" "$php_fpm_www_conf"
+#    fi
+#    ## Update Nginx PHP-FPM conf to use TCP socket connection
+#    sed -i -E "s|(\s*)(server .*)$|\1\#\2\n\1server $socket;|" \
+#        /etc/nginx/conf.d/php-fpm.conf
+#)
+
+
+# On Debian/Ubuntu, if PHP FPM is using UNIX socket connection,
+# then update user of nginx process to be same as owner of socket,
+# so that it has permission to access UNIX socket of PHP FPM process.
+if [[ $php_fpm_socket =~ ^unix: ]]; then
+	file=$(cut -f2 -d: <<< $php_fpm_socket)
+	socket_user=$(stat -c %U $file)
+	if [[ $socket_user != root ]]; then
+		bak /etc/nginx/nginx.conf
+		sed -i -E "s|^(user .*;)|#\1\nuser $socket_user;|" /etc/nginx/nginx.conf
+	fi
 fi
 
+
 # Ensure existence of PHP file configuration for Nginx server blocks
+echo "Creating /etc/nginx/default.d/php.conf..."
 [[ ! -d /etc/nginx/default.d ]] && mkdir -vp /etc/nginx/default.d
-if [[ -d /etc/nginx/default.d && ! -f /etc/nginx/default.d/php.conf ]]; then
-	echo "Creating /etc/nginx/default.d/php.conf..."
-	sudo tee /etc/nginx/default.d/php.conf >/dev/null <<"EOF"
+[[ -f /etc/nginx/default.d/php.conf ]] && bak /etc/nginx/default.d/php.conf
+cat > /etc/nginx/default.d/php.conf <<"EOF"
 # pass the PHP scripts to FastCGI server
 #
 # See conf.d/php-fpm.conf for socket configuration
@@ -96,7 +161,24 @@ location ~ \.php$ {
     fastcgi_pass   php-fpm;
 }
 EOF
+
+
+# Update default Nginx server conf to handle PHP files
+file=/etc/nginx/sites-available/default
+if [[ -f $file ]]; then
+	nginx_try_php='try_files $uri $uri/ /index.php;'
+	if ! grep -q "^\s*$nginx_try_php" $file; then
+		echo "Updating $file to load php files: \`$nginx_try_php\`..."
+		bak $file
+		if grep -q "^\s*index\s*index.html .*" $file; then
+			sed -i -E "s|^(\s*)(index\s*index.html .*)|\1\#\2\n\1$nginx_try_php|" $file
+		else
+			sed -i -E "s|^(\s*)(location / \{)|\1\2\n\1\1$nginx_try_php|" $file
+		fi
+		systemctl reload nginx
+	fi
 fi
+
 
 # Install Composer package dependency manager for PHP projects
 if $(dirname $0)/composer; then
