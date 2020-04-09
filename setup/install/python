@@ -3,50 +3,72 @@
 # Install Python code interpreter
 
 
-[[ $(id -u) != 0 ]] && echo "Error: Must be run as sudo/root." && exit 1
+[[ $(id -u) != 0 ]] && >&2 echo "Error: Must be run as sudo/root." && exit 1
 
 
 python_version=3.8.2
-file=Python-$python_version
 
-echo "INFO: Install Python $python_version..."
-
-## Download dependencies to compile Python source code
-dnf install -y gcc openssl-devel bzip2-devel libffi-devel tar make
-dnf install -y sqlite-devel.x86_64
-
-## Download source code bundle
-cd /opt
-curl -LO https://www.python.org/ftp/python/$python_version/$file.tgz
-tar -zv -xf $file.tgz
-
-## Compile and install
-cd $file
-./configure --enable-optimizations
-make altinstall
-cd - >/dev/null
-rm -v $file.tgz
+## Get version number used in filename (Remove patch version number)
+file_version=$(cut -f 1,2 -d "." <<< $python_version)
 
 
-## Create system links to access the latest versions of python and pip by plain name
+if ! command -v python3.8 >/dev/null; then
+	echo "INFO: Install Python $python_version..."
+else
+	>&2 echo "Python $python_version is already installed."
+	exit 1
+fi
 
-### Get version number used in filename (Remove patch version number)
-file_version=$(echo $python_version | cut -f 1,2 -d ".")
-major_version=$(echo $python_version | cut -f 1 -d ".")
+
+if command -v dnf >/dev/null; then
+
+	## Download dependencies to compile Python source code
+	dnf install -y gcc openssl-devel bzip2-devel libffi-devel tar make
+	dnf install -y sqlite-devel.x86_64
+
+	## Install from source code
+	(
+		### Download source code bundle
+		cd /opt
+		file=Python-$python_version
+		curl -LO https://www.python.org/ftp/python/$python_version/$file.tgz
+		tar -zv -xf $file.tgz
+
+		### Compile and install
+		cd $file
+		./configure --enable-optimizations
+		make altinstall
+		rm -v $file.tgz
+	)
+
+elif command -v apt >/dev/null; then
+
+	apt upgrade
+	apt install -y software-properties-common
+
+	## Install Python
+	add-apt-repository -y ppa:deadsnakes/ppa
+	apt install -y python$file_version python$file_version-venv
+
+fi
+
+
+## Update libraries pip and setuptools to latest versions
+echo "INFO: Update libraries pip and setuptools to latest versions..."
+pip$file_version install -U pip setuptools
+
+
+## Create system links to access latest versions of python and pip by plain name (if possible)
+
+major_version=$(cut -f 1 -d "." <<< $python_version)
 
 ### Link python binary to latest version
 ln -vs /usr/local/bin/python$file_version /usr/bin/python
-if [[ ! -f /usr/bin/python$major_version ]]; then
-	ln -vs /usr/local/bin/python$file_version /usr/bin/python$major_version
-fi
+ln -vs /usr/local/bin/python$file_version /usr/bin/python$major_version
 
 ### Link pip binary to latest version
-ln -vs /usr/local/bin/pip$file_version /usr/bin/pip
-if [[ ! -f /usr/bin/pip$major_version ]]; then
+if [[ -f /usr/local/bin/pip$file_version ]]; then
+	ln -vs /usr/local/bin/pip$file_version /usr/bin/pip
 	ln -vs /usr/local/bin/pip$file_version /usr/bin/pip$major_version
 fi
-
-### Update libraries pip and setuptools to latest versions
-echo "INFO: Update libraries pip and setuptools to latest versions..."
-pip install -U pip setuptools
 
