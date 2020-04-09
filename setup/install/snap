@@ -3,14 +3,12 @@
 # Install Snap application manager
 
 
-[[ $(id -u) != 0 ]] && echo "Error: Must be run as sudo/root." && exit 1
+[[ $(id -u) != 0 ]] && >&2 echo "Error: Must be run as sudo/root." && exit 1
 
 is_centos() {
 	[[ -f /etc/centos-release ]]
 }
-is_ubuntu() {
-	[[ $(uname -a) =~ Ubuntu ]]
-}
+
 
 if is_centos; then
 	# Ensure that Extra Packages for Enterprise Linux (EPEL) is installed and updated.
@@ -26,4 +24,9 @@ if is_centos; then
 
 	echo "Note: Either restart your session to update your PATH, or run the following:"
 	echo "PATH=\$PATH:/var/lib/snapd/snap/bin"
+
+
+elif command -v apt >/dev/null; then
+	sudo apt install snapd
+
 fi
