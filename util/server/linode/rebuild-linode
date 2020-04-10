@@ -41,6 +41,11 @@ test ${response:-n} = y || exit
 
 
 command="linode-cli --text linodes rebuild $server_id --root_pass"
+
+if [[ -f ~/.ssh/id_rsa.pub ]]; then
+	command+=" --authorized_keys '$(cat ~/.ssh/id_rsa.pub)'"
+fi
+
 if [[ $image_name != "" ]]; then
 	command+=" --image $image_id"
 fi

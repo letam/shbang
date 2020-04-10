@@ -27,5 +27,11 @@ echo -n "Confirm restore droplet ID $droplet_id using image ID $image_id (y/n): 
 read -r response
 test ${response:-n} = y || exit
 
-doctl compute droplet-action restore $droplet_id --image-id $image_id
+command="doctl compute droplet-action restore $droplet_id --image-id $image_id"
+
+if [[ -f ~/.credentials/ssh_public_key_fingerprint ]]; then
+	command+=" --ssh-keys $(cat ~/.credentials/ssh_public_key_fingerprint)"
+fi
+
+eval $command
 
