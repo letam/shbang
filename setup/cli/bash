@@ -29,3 +29,47 @@ cat >> ~/.bashrc <<-"EOF"
 
 	EOF
 
+
+## Add plugins and aliases
+mkdir -vp ~/.config/bash/plugins
+(
+	cd ~/.config/bash/plugins
+
+	echo 'Downloading "Git plugin (aliases)"...'
+	curl -LO https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/plugins/git/git.plugin.zsh
+	zfile=~/.config/bash/plugins/git.plugin.zsh
+
+	### Modify the file for it to work in Bash
+	file=$(sed 's/\.zsh$/\.bash/' <<< $zfile)
+	cp -vp "$zfile" "$file"
+
+	#### Disable all 'compdef' statements
+	sed -i -E "s/^(compdef)/#\1/" $file
+
+	#### Convert one-liner functions to be multi-line blocks
+	sed -i -E "s/^(function [^{]+\{)\s*([^}]+)\s(})/\1\n  \2\n\3/" $file
+
+	#### Disable 'autoload is-at-least' statement and subsequent block
+	line_num=$(grep -n -m1 "^autoload .* is-at-least" $file | cut -f1 -d:)
+	if [[ $line_num != "" ]]; then
+		sed -i "$line_num,$((line_num+3)) {s/^/#/}" $file
+	fi
+	##### Add alias for 'git stash push'
+	if ! grep -q '^alias gsta=' $file; then
+		sed -i -E "s/^(alias gstaa=)/alias gsta='git stash push'\n\1/" $file
+	fi
+)
+
+if ! grep -q '# Plugins and aliaes' ~/.bashrc; then
+	cat >> ~/.bashrc <<"EOF"
+
+
+# Plugins and aliases
+for x in ~/.config/bash/plugins/*.bash; do
+	source $x
+done
+
+EOF
+
+fi
+
