@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+
+# Install ZSH and setup plugins
+
+
+## Install ZSH
+if command -v dnf >/dev/null; then
+	sudo dnf install -y zsh
+elif command -v apt >/dev/null; then
+	sudo apt install -y zsh
+fi
+
+
+## Add history settings
+cat >> ~/.zshrc <<-"EOF"
+
+
+	# History settings
+
+	# Cause all terminals to share the same history 'session', and save timestamps.
+	setopt SHARE_HISTORY
+
+	## Ignore lines that begin with a space, and ignore duplicate entries
+	setopt HIST_IGNORE_SPACE
+	setopt HIST_IGNORE_DUPS
+
+	## Increase history size
+	HISTFILE=~/.zhistory
+	HISTSIZE=999999999
+	SAVEHIST=$HISTSIZE
+
+	EOF
+
+
+## Use zimfw - Zsh IMproved FrameWork (https://github.com/zimfw/zimfw)
+curl -fsSL https://raw.githubusercontent.com/zimfw/install/master/install.zsh | zsh
+
+### Install zim modules
+cat >> ~/.zimrc <<-'EOT'
+
+	#
+	# Customizations
+	#
+
+	# Pure prompt
+	zmodule sindresorhus/pure --source async.zsh --source pure.zsh
+
+	EOT
+zsh -c 'source ~/.zshrc && zimfw install'
