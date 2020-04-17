@@ -11,8 +11,8 @@ user=$(cut -f1 -d@ <<< $dest)
 host=$(cut -f2 -d@ <<< $dest)
 
 
-./setup-server -h $host -n $user -k "$(cat ~/.credentials/authorized_keys)" || \
-	./setup-server -u $user -h $host -n $user -k "$(cat ~/.credentials/authorized_keys)"
+./setup-server -h $host -n $user -k "$(cat ./env-data/.credentials/authorized_keys)" || \
+	./setup-server -u $user -h $host -n $user -k "$(cat ./env-data/.credentials/authorized_keys)"
 
 
 echo "Installing some tools..." && \
@@ -31,10 +31,10 @@ scp -p ~/.ssh/id_rsa $dest: && ssh $dest "mv id_rsa .ssh"
 
 
 echo "Transferring files..." && \
-	scp -pr ~/.credentials $dest:.credentials && \
+	scp -pr ./env-data/.credentials $dest:.credentials && \
 	ssh $dest "chmod -v 700 ~/.credentials" && \
-	cp-app-files ~/cert-archives $dest: && \
-	cp-app-files . $dest:/opt/orc
+	./sbin/cp-app-files ./env-data/cert-archives $dest: && \
+	./sbin/cp-app-files . $dest:/opt/orc
 
 
 echo "Set up some stuff..." && \
