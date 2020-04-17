@@ -14,15 +14,11 @@ if [[ $(id -u) != 0 ]]; then echo "Error: Must be run as sudo/root." ; exit 1; f
 
 # Auxiliary functions
 
-backup_file() {
-	cp -p "$1" "$1.bak.$(date -u +%Y-%m-%d-%H%M%S)"
-}
-is_centos() {
-	[[ $(uname -s) = "Linux" && -f /etc/centos-release ]]
-}
-is_ubuntu() {
-	[[ $(uname -s) = "Linux" && $(uname -a) =~ "Ubuntu" ]]
-}
+backup_file() { cp -p "$1" "$1.bak.$(date -u +%Y-%m-%d-%H%M%S)"; }
+has_dnf() { command -v dnf >/dev/null; }
+has_apt() { command -v apt >/dev/null; }
+is_centos() { [[ -f /etc/centos-release ]]; }
+is_ubuntu() { [[ $(uname -a) =~ "Ubuntu" ]]; }
 
 
 # Args
@@ -136,7 +132,7 @@ fi
 
 
 # Enable Firewall
-if is_centos; then
+if has_dnf; then
 	if ! command -v firewalld >/dev/null; then
 		echo "INFO: Installing firewalld service."
 		sudo dnf install -y firewalld && echo >/dev/null
@@ -155,7 +151,7 @@ if is_centos; then
 		sudo firewall-cmd --permanent --add-service=ssh
 		sudo firewall-cmd --reload
 	fi
-elif is_ubuntu; then
+elif command -v ufw >/dev/null; then
 	echo "INFO: Enable firewall and open SSH port."
 	sudo ufw allow "OpenSSH"
 	echo y | sudo ufw enable
@@ -173,7 +169,7 @@ fi
 
 
 # Enable automatic security updates to system
-if is_centos; then
+if has_dnf; then
 	echo "INFO: Enable automatic security updates to system."
 	# TODO: Look into throttling download speeds when downloading automatic updates
 	sudo dnf install -y dnf-automatic
@@ -188,6 +184,8 @@ if is_centos; then
 			/etc/dnf/automatic.conf
 	fi
 	sudo systemctl enable --now dnf-automatic.timer
+elif has_apt; then
+	echo "TODO: Enable automatic security updates on Ubuntu server."
 fi
 
 

@@ -7,15 +7,11 @@ if [[ $(id -u) != 0 ]]; then echo "Error: Must be run as sudo/root." ; exit 1; f
 
 # Auxiliary functions
 
-backup_file() {
-	cp -p "$1" "$1.bak.$(date -u +%Y-%m-%d-%H%M%S)"
-}
-is_centos() {
-	[[ $(uname -s) = "Linux" && -f /etc/centos-release ]]
-}
-is_ubuntu() {
-	[[ $(uname -s) = "Linux" && $(uname -a) =~ "Ubuntu" ]]
-}
+backup_file() { cp -p "$1" "$1.bak.$(date -u +%Y-%m-%d-%H%M%S)"; }
+has_dnf() { command -v dnf >/dev/null; }
+has_apt() { command -v apt >/dev/null; }
+is_centos() { [[ -f /etc/centos-release ]]; }
+is_ubuntu() { [[ $(uname -a) =~ "Ubuntu" ]]; }
 
 
 # Main
@@ -41,7 +37,7 @@ df > /var/log/stats/df/1.0
 df -h > /var/log/stats/df-h/1.0
 
 ## Fetch latest system update information
-if is_centos; then
+if has_dnf; then
 
 	## Log system kernel before update
 	rpm -q --last kernel | sudo tee /var/log/stats/kernel/1.0
@@ -57,7 +53,7 @@ if is_centos; then
 		echo "INFO: __dnf check-update END__: $(tmst)"
 	touch /var/log/setup/update-server.check-update.1
 
-elif is_ubuntu; then
+elif has_apt; then
 
 	## Log system motd before update
 	cat /run/motd.dynamic > /var/log/stats/motd/1.0
@@ -80,7 +76,7 @@ df > /var/log/stats/df/1.after-first-check-update
 df -h > /var/log/stats/df-h/1.after-first-check-update
 
 ## Install system updates
-if is_centos; then
+if has_dnf; then
 
 	touch /var/log/setup/update-server.upgrade.0
 	echo "INFO: __dnf upgrade BEGIN__: $(tmst)"
@@ -92,7 +88,7 @@ if is_centos; then
 	## Log system kernel after update
 	rpm -q --last kernel | sudo tee /var/log/stats/kernel/1.1
 
-elif is_ubuntu; then
+elif has_apt; then
 
 	## Upgrade system packages while ignoring all prompts
 	touch /var/log/setup/update-server.upgrade.0
@@ -118,10 +114,10 @@ echo "INFO: __END__: $(tmst)"
 
 
 # Reboot to apply upgrades
-if is_centos && [[ $(uname -r) != $(rpm -q --last kernel | head -1 | sed -E "s|kernel-([0-9.a-z_-]+).*$|\1|") ]]; then
+if has_dnf && [[ $(uname -r) != $(rpm -q --last kernel | head -1 | sed -E "s|kernel-([0-9.a-z_-]+).*$|\1|") ]]; then
 	echo "Kernel upgrade requires reboot. Rebooting now..."
 	sudo reboot.sh
-elif is_ubuntu && [[ -f /var/run/reboot-required ]]; then
+elif has_apt && [[ -f /var/run/reboot-required ]]; then
 	echo "INFO: Upgrades require reboot. Rebooting now..."
 	sudo reboot.sh
 else
