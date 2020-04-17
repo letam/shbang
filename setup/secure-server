@@ -163,12 +163,12 @@ fi
 
 
 # Ensure cron service is enabled and started
-if is_centos && ! systemctl -q is-active crond; then
-	sudo systemctl enable crond
-	sudo systemctl start crond
-elif is_ubuntu && ! systemctl -q is-active cron.service; then
-	sudo systemctl enable cron.service
-	sudo service cron start
+cron_service=$(systemctl list-unit-files | grep -m1 -E "crond?" -o)
+if ! systemctl list-unit-files --state=enabled | grep -q "$cron_service"; then
+	sudo systemctl enable "$cron_service"
+fi
+if ! systemctl -q is-active "$cron_service"; then
+	sudo systemctl start "$cron_service"
 fi
 
 
