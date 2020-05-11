@@ -1,16 +1,18 @@
 #!/usr/bin/env bash
 
-# Restore Digital Ocean droplet to specified image
+# Restore or rebuild Digital Ocean droplet to specified image
 
 usage() {
-	>&2 echo "Usage: $0 DROPLET_NAME IMAGE_NAME"
+	>&2 echo "Usage: $0 DROPLET_NAME IMAGE_NAME [--rebuild]"
 	exit 1
 }
 argc=$#
-(( argc != 2 )) && usage
+(( argc < 2 || argc > 3 )) && usage
 
 droplet_name=$1 ; shift
 image_name=$1 ; shift
+rebuild=$1 ; shift
+# TODO: Update script to check for actual '--rebuild' argument
 
 
 droplet_id=$(doctl compute droplet list \
@@ -23,9 +25,32 @@ image_id=$(doctl compute image list --public \
 test "$image_id" = "" && >&2 echo "Image not found." && exit 1
 
 
-echo -n "Confirm restore droplet ID $droplet_id using image ID $image_id (y/n): "
+if [[ $rebuild != "" ]]; then
+	action=rebuild
+else
+	action=restore
+fi
+
+echo -n "Confirm $action droplet ID $droplet_id using image ID $image_id (y/n): "
 read -r response
 test ${response:-n} = y || exit
 
-doctl compute droplet-action restore $droplet_id --image-id $image_id
+
+## Construct command
+command="doctl compute droplet-action $action $droplet_id"
+
+### Specify image id
+if [[ $action = rebuild ]]; then
+	command+=" --image "
+else
+	command+=" --image-id "
+fi
+command+="$image_id"
+
+
+if [[ $action = build && -f ~/.credentials/ssh_public_key_fingerprint ]]; then
+   command+=" --ssh-keys $(cat ~/.credentials/ssh_public_key_fingerprint)"
+fi
+
+eval $command
 
