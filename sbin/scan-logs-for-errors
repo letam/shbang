@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+
+# Scan files in a given directory for lines indicating an error.
+
+[[ $# != 1 ]] && >&2 echo "Usage: $0 DIRECTORY" && exit 1
+dir=$1
+
+grep -r -i "error[:!]" $dir
+

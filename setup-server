@@ -75,6 +75,7 @@ sbin_script_files=(
 	firewall-add-rule	# Allow connection to port from IP address
 	firewall-remove-rule	# Remove rule for connection to port from IP address
 	execute-immediate-cronjob	# Execute next queued cronjob immediately
+	scan-logs-for-errors 	# Scan directory files for lines indicating an error
 )
 for file in "${sbin_script_files[@]}"; do
 	contains_single_quotes=n
