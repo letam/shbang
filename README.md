@@ -2,14 +2,16 @@
 
 💥 "It all started with a shell..."
 
-Shbang is a library of scripts to orchestrate the deployment of secure,
-production-ready applications on Linux servers, via Linux commands and Bash
-scripts.
+Shbang is a library of scripts to orchestratate the deployment of secure,
+production-ready web applications on Linux servers (infrastructure as code)
+via scripts of Bash shell and Linux commands, but is ultimately a polyglot framework.
 
-So far, it's tested/guaranteeed to work on **CentOS 8** and **Ubuntu 18.04**
+Open to using any code within reach, whether Perl, Python, PHP, Go, Deno, etc.
 
-It also strives to be a reference of best-practices for scripting with Bash and
-Unix-based tools.
+So far, Shbang is tested/guaranteeed to work on **CentOS 8** and **Ubuntu 18.04**
+
+This project strives to be an ever-improving reference of best-practices
+for scripting with Bash and Unix-based tools.
 
 
 A hack? ... Perhaps.
@@ -22,7 +24,10 @@ But hey, with love and perseverance, it works!
 Elegance is not about perfection, but about doing well with what we have.
 
 ... Speaking of which. This project is in dire need of tests.
-And documentation. Coming soon!
+But you can examine the results of script actions in the logs.
+
+Documentation is WIP. But you're encouraged to explore the code, which aims
+to be as self-documenting as possible.
 
 
 Contributions welcome.
@@ -30,7 +35,7 @@ Contributions welcome.
 
 ## Requirements
 
-- A machine with SSH, Bash 4.4+, sed, grep
+- A machine with SSH, Bash 4.4+ or ZSH, sed, grep
 - SSH access to server or VM running either CentOS 8 or Ubuntu 18.04 LTS
 
 ## Instructions
@@ -38,15 +43,27 @@ Contributions welcome.
 1. Clone this project directory
 2. In the shell, `cd` into the root of this project
 3. Have your SSH authorized keys for the server in a file somewhere. Let's say `~/tmp/authorized_keys`, for example.
-4. Then execute:
+4. Then execute (or place into a script):
 	```
-	host=localhost                                # (required)
-	authorized_keys=$(cat ~/tmp/authorized_keys)  # (optional; no default value)
-	port=22                                       # (optional; default value is 22)
-	user=root                                     # (optional; default value is root)
-	ssh_key=~/.ssh/id_rsa                         # (optional; default value is ~/.ssh/id_rsa)
-	new_user=ada                                  # (optional; default value is smith)
+	# Specify domain name or IP address of target server (**required**)
+	host=localhost
 
+	# Specify value of SSH authorized_keys to transfer (*optional*; default='')
+	authorized_keys=$(cat ~/tmp/authorized_keys)
+
+	# Specify SSH Port (*optional*; default: 22)
+	port=22
+
+	# Specify login user (*optional*; default: root)
+	user=root
+
+	# Specify ssh_key for connection to host (*optional*; default: ~/.ssh/id_rsa)
+	ssh_key=~/.ssh/id_rsa
+
+	# Specify username of newly created user (*optional*; default: smith)
+	new_user=ada
+
+	# Execute
 	./setup-server -h "$host" -p "$port" -i "$ssh_key" -k "$authorized_keys" -u "$user" -n "$new_user"
 	```
 
@@ -63,4 +80,12 @@ If using hard-coded arguments directly in the command, then...
 	```
 	bash -c "./setup-server -h '$host' -n '$new_user' -k \"\$(cat ~/tmp/authorized_keys)\""
 	```
+
+
+## Homework Test
+
+1. What happens when you run the command, but `~/tmp/authorized_keys` doesn't exist?
+
+
+## Notes
 
