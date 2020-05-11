@@ -23,6 +23,6 @@ user=$(cut -f1 -d@ <<< $dest)
 
 # Main
 
-./deploy/teardown-django $domain $user@$domain $user@db.$domain && \
-./deploy/django-postgresql $domain $user@$domain $user@db.$domain
+./remote/teardown-django $domain $user@$domain $user@db.$domain && \
+./remote/django-postgresql $domain $user@$domain $user@db.$domain
 
