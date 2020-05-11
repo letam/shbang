@@ -81,6 +81,18 @@ If using hard-coded arguments directly in the command, then...
 	bash -c "./setup-server -h '$host' -n '$new_user' -k \"\$(cat ~/tmp/authorized_keys)\""
 	```
 
+## Testing
+
+Scan a server's logs for errors via:
+	```
+	## Direct SSH command
+	ssh $user@$host "grep -r -i 'error[:!]' /var/log/setup"
+	```
+	OR
+	```
+	## Script provided by library (abstracts away command)
+	./remote/run-sbin $user@$host scan-logs-for-errors /var/log/setup
+	```
 
 ## Homework Test
 
