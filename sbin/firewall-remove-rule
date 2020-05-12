@@ -11,14 +11,38 @@ ip_address=$1 ; shift
 
 
 ## Set firewall rule to disallow connections to $port from $ip_address
-zone=$(firewall-cmd --get-default-zone)
-backup_conf=$(sudo bak /etc/firewalld/zones/$zone.xml | sed -E "s/.* -> '(.*)'/\1/")
-sudo firewall-cmd --permanent --zone=$zone --remove-rich-rule="
-	rule family=ipv4
-	source address=$ip_address
-	port protocol=tcp port=$port accept" >/dev/null
-if [[ $(diff /etc/firewalld/zones/$zone.xml $backup_conf) = "" ]]; then
-	rm $backup_conf
-	exit 1
-fi
-sudo firewall-cmd --reload
+
+firewalld_remove_rule() {
+	zone=$(firewall-cmd --get-default-zone)
+	backup_conf=$(sudo bak /etc/firewalld/zones/$zone.xml | sed -E "s/.* -> '(.*)'/\1/")
+	sudo firewall-cmd --permanent --zone=$zone --remove-rich-rule="
+		rule family=ipv4
+		source address=$ip_address
+		port protocol=tcp port=$port accept" >/dev/null
+	if [[ $(diff /etc/firewalld/zones/$zone.xml $backup_conf) = "" ]]; then
+		rm $backup_conf
+		exit 1
+	fi
+	sudo firewall-cmd --reload
+}
+strip_cidr_suffix() { cut -f1 -d/ <<< "$1"; }
+ufw_remove_rule() {
+	local ip_address=$(strip_cidr_suffix $ip_address)
+	rule_number=$(sudo ufw status numbered \
+		| grep "] $port/tcp\s" | grep "\s$ip_address" | cut -f 2 -d" " | tr -d ])
+	sudo ufw --force delete $rule_number
+}
+
+
+main() {
+	if command -v firewall-cmd >/dev/null; then
+		firewalld_remove_rule
+	elif command -v ufw >/dev/null; then
+		ufw_remove_rule
+	else
+		>&2 echo "No recognized firewall installed."
+		exit 1
+	fi
+}
+
+main
