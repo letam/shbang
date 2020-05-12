@@ -14,7 +14,13 @@ fi
 
 
 pgsql_version=12
+
 rhel_version=8
+
+
+is_command() {
+	command -v $1 >/dev/null
+}
 
 
 ## Install the repository RPM:
@@ -31,30 +37,57 @@ disable_builtin_postgresql_module() {
 
 ## Install the client packages
 install_client() {
-	dnf install -y postgresql$pgsql_version
+	if is_command dnf; then
+		dnf install -y postgresql$pgsql_version
+	elif is_command apt; then
+		apt install -y postgresql-client-$pgsql_version
+	fi
 }
 
 
 ## Install the server packages, initialize the database, enable system service
 install_server() {
 	echo "Install PostgreSQL server (version $pgsql_version)"
-	dnf install -y postgresql$pgsql_version-server
+	if is_command dnf; then
+		dnf install -y postgresql$pgsql_version-server
+	elif is_command apt; then
+		apt install -y postgresql-$pgsql_version
+	fi
 
 	## Initialize database
-	/usr/pgsql-$pgsql_version/bin/postgresql-$pgsql_version-setup initdb
+	if is_command dnf; then
+		/usr/pgsql-$pgsql_version/bin/postgresql-$pgsql_version-setup initdb
+	elif is_command apt; then
+		apt install -y postgresql-$pgsql_version
+	fi
 
-	echo "Enable system service."
-	systemctl enable postgresql-$pgsql_version
+	if is_command dnf; then
+		echo "Enable system service."
+		systemctl enable postgresql-$pgsql_version
+	elif is_command apt; then
+		echo "System service for PostgreSQL server is enabled by default in Ubuntu."
+	fi
 
-	## Create symblink to access service without referring to version
-	ln -s /usr/lib/systemd/system/postgresql-$pgsql_version.service /etc/systemd/system/postgresql.service
+	if is_command dnf; then
+		## Create symblink to access service without referring to version
+		ln -vs /usr/lib/systemd/system/postgresql-$pgsql_version.service /etc/systemd/system/postgresql.service
+	elif is_command apt; then
+		## postgresql.service is already created and represents PostgreSQL RDBMS
+		echo
+	fi
 }
 
 
 ## Configure authentication and connection settings for server
 configure_settings() {
 	echo "Backup initial database server configuration file."
-	server_conf=/var/lib/pgsql/$pgsql_version/data/postgresql.conf
+	### Get location of postgresql.conf via:
+	### `sudo -u postgres psql -t -P format=unaligned -c "SHOW config_file"`
+	if is_command dnf; then
+		server_conf=/var/lib/pgsql/$pgsql_version/data/postgresql.conf
+	elif is_command apt; then
+		server_conf=/etc/postgresql/$pgsql_version/main/postgresql.conf
+	fi
 	cp -vp $server_conf $server_conf.bak
 
 	password_encryption="scram-sha-256"
@@ -69,11 +102,18 @@ configure_settings() {
 	## Handle separately
 
 	echo "Backup initial host-based authentication configuration file"
-	auth_conf=/var/lib/pgsql/$pgsql_version/data/pg_hba.conf
+	### Get location of pg_hba.conf via:
+	### `sudo -u postgres psql -t -P format=unaligned -c "SHOW hba_file"`
+	if is_command dnf; then
+		auth_conf=/var/lib/pgsql/$pgsql_version/data/pg_hba.conf
+	elif is_command apt; then
+		auth_conf=/etc/postgresql/$pgsql_version/main/pg_hba.conf
+	fi
 	cp -vp $auth_conf $auth_conf.bak
 }
 
 
+## Set up script to read logs
 install_log_reader() {
 	cat > /usr/local/sbin/pgsql-log <<-"EOF"
 		# Display latest postgresql log contents in less, in tail mode
@@ -83,31 +123,55 @@ install_log_reader() {
 		else
 			sudo -v || exit 1
 		fi
-		pgsql_version=$(sudo -u postgres ls /var/lib/pgsql | sort -V | tail -1)
-		log_dir=/var/lib/pgsql/$pgsql_version/data/log
-		latest_log_file=$(sudo -u postgres ls -t $log_dir | head -1)
-		sudo -u postgres less -N+F $log_dir/$latest_log_file
+		if [[ -d /var/log/postgresql ]]; then
+			log_dir=/var/log/postgresql
+			latest_log_file=$(ls -t $log_dir | head -1)
+			less -N+F $log_dir/$latest_log_file
+		elif command -v dnf >/dev/null; then
+			pgsql_version=$(sudo -u postgres ls /var/lib/pgsql | sort -V | tail -1)
+			log_dir=/var/lib/pgsql/$pgsql_version/data/log
+			latest_log_file=$(sudo -u postgres ls -t $log_dir | head -1)
+			sudo -u postgres less -N+F $log_dir/$latest_log_file
+		fi
 		EOF
 	chmod +x /usr/local/sbin/pgsql-log
 }
 
 
-# Main
+main() {
+	if is_command dnf; then
+		install_repository_rpm
+		disable_builtin_postgresql_module
+	elif is_command apt; then
+		echo
+	else
+		>&2 echo "Server OS not supported."
+		exit
+	fi
 
-install_repository_rpm
-disable_builtin_postgresql_module
+	if [[ $install_client_only = 0 ]]; then
+		install_client
+	else
+		install_server
+		configure_settings
+		install_log_reader
 
-if [[ $install_client_only = 0 ]]; then
-	install_client
-else
-	install_server
-	configure_settings
-	install_log_reader
+		if is_command dnf; then
+			systemctl start postgresql-$pgsql_version
 
-	systemctl start postgresql-$pgsql_version
+			## Check status of service
+			systemctl status -l --no-pager postgresql-$pgsql_version
+		elif is_command apt; then
+			systemctl start postgresql@$pgsql_version-main
 
-	## Check status of service
-	systemctl status -l --no-pager postgresql-$pgsql_version
-fi
+			## Check status of service
+			systemctl status -l --no-pager postgresql@$pgsql_version-main
+		fi
+	fi
+
+}
+
+main
 
 echo "INFO [$(date)]: Done!"
+
