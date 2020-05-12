@@ -27,9 +27,15 @@ sudo -i -u postgres psql -c "
 auth_conf=$(sudo -u postgres psql -t -P format=unaligned -c "SHOW hba_file")
 echo "Update PostgreSQL host auth configuration file '$auth_conf'"
 sudo bak $auth_conf
-rule="local	all	$username	$host	scram-sha-256"
+rule="local	all		$username				scram-sha-256"
 echo "- Inserting rule: '$rule'"
-sudo sed -i -E "s/(^local\s+all\s+all\s+peer$)/$rule\n\1/" $auth_conf
+sudo sed -i -E "s|(^local\s+all\s+all\s+peer$)|$rule\n\1|" $auth_conf
+
+if [[ $host != "" && $host != localhost ]]; then
+	rule="host	$username	$username	$host/32	scram-sha-256"
+	echo "- Inserting rule: '$rule'"
+	sudo sed -i -E "s|(^host\s+all\s+all\s+127\.0\.0\.1/32\s+(ident\|md5)$)|$rule\n\1|" $auth_conf
+fi
 
 ### Reload config settings
 echo "Reload PostgreSQL server conf via: 'SELECT pg_reload_conf();'"
