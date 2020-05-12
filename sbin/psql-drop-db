@@ -18,7 +18,8 @@ if ! ps aux | grep -q '^postgres '; then
 fi
 
 
-pgsql_version=$(sudo -u postgres ls /var/lib/pgsql | sort -V | tail -1)
+pgsql_version=$(sudo -u postgres \
+	psql -c "\echo :VERSION" | cut -f 2 -d" " | cut -f1 -d.)
 
 
 ## Drop database
@@ -35,7 +36,7 @@ sudo -i -u postgres psql -c "
 ## Update authentication configuration
 
 ### Remove authentication rule for user to database
-auth_conf=/var/lib/pgsql/$pgsql_version/data/pg_hba.conf
+auth_conf=$(sudo -u postgres psql -t -P format=unaligned -c "SHOW hba_file")
 echo "Update PostgreSQL host auth configuration file '$auth_conf'"
 backup=$auth_conf.bak.$(tmst)
 cp -p $auth_conf $backup

@@ -6,7 +6,8 @@
 
 [[ $# < 2 || $# > 4 ]] && >&2 echo "Usage: $0 USERNAME PASSWORD [USER_HOST]" && exit 1
 
-pgsql_version=$(sudo -u postgres ls /var/lib/pgsql | sort -V | tail -1)
+pgsql_version=$(sudo -u postgres \
+	psql -c "\echo :VERSION" | cut -f 2 -d" " | cut -f1 -d.)
 
 
 username=$1 ; shift
@@ -23,7 +24,7 @@ sudo -i -u postgres psql -c "
 ## Update authentication configuration with new rule
 
 ### Insert new authentication rule for user to access database
-auth_conf=/var/lib/pgsql/$pgsql_version/data/pg_hba.conf
+auth_conf=$(sudo -u postgres psql -t -P format=unaligned -c "SHOW hba_file")
 echo "Update PostgreSQL host auth configuration file '$auth_conf'"
 sudo bak $auth_conf
 rule="local	all	$username	$host	scram-sha-256"
