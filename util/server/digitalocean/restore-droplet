@@ -15,8 +15,7 @@ rebuild=$1 ; shift
 # TODO: Update script to check for actual '--rebuild' argument
 
 
-droplet_id=$(doctl compute droplet list \
-	| tail -n +2 | grep -E -m1 "^[0-9]+\s+$droplet_name\s" | cut -f 1 -d" ")
+droplet_id=$(`dirname $0`/droplet-id $droplet_name)
 test "$droplet_id" = "" && >&2 echo "Droplet not found." && exit 1
 
 

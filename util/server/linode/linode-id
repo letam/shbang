@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+
+# Get ID of Linode server by label
+
+usage() {
+	>&2 echo "Usage: $0 SERVER_LABEL"
+	exit 1
+}
+argc=$#
+(( argc != 1 )) && usage
+
+server_label=$1 ; shift
+
+linode-cli --text linodes list \
+	| tail -n +2 | grep -E -m1 "^[0-9]+\s$server_label\s" | cut -f 1

@@ -13,8 +13,7 @@ server_name=$1 ; shift
 image_name=$1 ; shift
 
 
-server_id=$(linode-cli --text linodes list \
-	| tail -n +2 | grep -E -m1 "^[0-9]+\s+$server_name\s" | cut -f 1)
+server_id=$(`dirname $0`/linode-id "$server_name")
 test "$server_id" = "" && >&2 echo "Server with that name not found." && exit 1
 
 

@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+
+# Get ID of droplet by name
+
+usage() {
+	>&2 echo "Usage: $0 DROPLET_NAME"
+	exit 1
+}
+argc=$#
+(( argc != 1 )) && usage
+
+droplet_name=$1 ; shift
+
+doctl compute droplet list \
+	| tail -n +2 | grep -m1 "\s$droplet_name\s" | cut -f 1 -d" "
+
