@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+
+# Get public IPv4 address of Digital Ocean droplet
+
+usage() {
+	>&2 echo "Usage: $0 DROPLET_NAME"
+	exit 1
+}
+argc=$#
+(( argc != 1 )) && usage
+
+droplet_name=$1 ; shift
+
+doctl compute droplet list | grep "\s$droplet_name\s" | tr -s " " | cut -f3 -d" "
+

@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+
+# Get public IPv4 address of Linode server
+
+usage() {
+	>&2 echo "Usage: $0 SERVER_LABEL"
+	exit 1
+}
+argc=$#
+(( argc != 1 )) && usage
+
+server_label=$1 ; shift
+
+ip_address=$(linode-cli --text linodes list | grep "\s$server_label\s" | cut -f 7)
+if [[ $ip_address =~ " " ]]; then
+	ip_address=$(cut -f1 -d" " <<< $ip_address)
+fi
+
+echo $ip_address
+
