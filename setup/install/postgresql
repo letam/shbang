@@ -157,16 +157,15 @@ main() {
 		install_log_reader
 
 		if is_command dnf; then
-			systemctl start postgresql-$pgsql_version
-
-			## Check status of service
-			systemctl status -l --no-pager postgresql-$pgsql_version
+			postgresql_service="postgresql-$pgsql_version"
 		elif is_command apt; then
-			systemctl start postgresql@$pgsql_version-main
-
-			## Check status of service
-			systemctl status -l --no-pager postgresql@$pgsql_version-main
+			postgresql_service="postgresql@$pgsql_version-main"
 		fi
+
+		systemctl restart $postgresql_service
+
+		## Check status of service
+		systemctl status -l --no-pager $postgresql_service
 	fi
 
 }
