@@ -142,12 +142,12 @@ set_nginx_ssl_conf() {
 
 	### Add code specifying SSL options
 	cat >> $nginx_conf <<EOT
-	#listen [::]:443 http2 ssl ipv6only=on; # managed by setup/web/html
-    listen 443 http2 ssl; # managed by setup/web/html
-    ssl_certificate /etc/letsencrypt/live/$domain/fullchain.pem; # managed by setup/web/html
-    ssl_certificate_key /etc/letsencrypt/live/$domain/privkey.pem; # managed by setup/web/html
-    include /etc/letsencrypt/options-ssl-nginx.conf; # managed by setup/web/html
-    #ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem; # managed by setup/web/html
+	#listen [::]:443 http2 ssl ipv6only=on; # managed by Certbot via setup/web/html
+    listen 443 http2 ssl; # managed by Certbot via setup/web/html
+    ssl_certificate /etc/letsencrypt/live/$domain/fullchain.pem; # managed by Certbot via setup/web/html
+    ssl_certificate_key /etc/letsencrypt/live/$domain/privkey.pem; # managed by Certbot via setup/web/html
+    include /etc/letsencrypt/options-ssl-nginx.conf; # managed by Certbot via setup/web/html
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem; # managed by Certbot via setup/web/html
 
 }
 EOT
@@ -158,18 +158,18 @@ EOT
 server {
     if (\$host = www.$domain) {
         return 301 https://\$host\$request_uri;
-    } # managed by setup/web/html
+    } # managed by Certbot via setup/web/html
 
 
     if (\$host = $domain) {
         return 301 https://\$host\$request_uri;
-    } # managed by setup/web/html
+    } # managed by Certbot via setup/web/html
 
 
     listen       80;
     listen       [::]:80;
     server_name  $domain www.$domain;
-    return 404; # managed by setup/web/html
+    return 404; # managed by Certbot via setup/web/html
 }
 EOT
 	else
@@ -177,13 +177,13 @@ EOT
 server {
     if (\$host = $domain) {
         return 301 https://\$host\$request_uri;
-    } # managed by setup/web/html
+    } # managed by Certbot via setup/web/html
 
 
     listen       80;
     listen       [::]:80;
     server_name  $domain;
-    return 404; # managed by setup/web/html
+    return 404; # managed by Certbot via setup/web/html
 }
 EOT
 	fi
