@@ -7,7 +7,11 @@
 
 ## Install MySQL daemon service and enable it
 if ! command -v mysqld >/dev/null; then
-	sudo dnf install -y mysql-server
+	if command -v dnf >/dev/null; then
+		sudo dnf install -y mysql-server
+	elif command -v apt >/dev/null; then
+		sudo apt install -y mysql-server
+	fi
 	sudo systemctl enable --now mysqld
 fi
 systemctl status -l --no-pager mysqld
@@ -31,7 +35,11 @@ mysql_root_pw=$(cat $pw_file)
 ### Ensure expect is installed
 if ! command -v expect >/dev/null; then
 	echo "Installing expect..."
-	sudo dnf install -y expect
+	if command -v dnf >/dev/null; then
+		sudo dnf install -y expect
+	elif command -v apt >/dev/null; then
+		sudo apt install -y expect
+	fi
 fi
 
 ### Automate mysql_secure_installation

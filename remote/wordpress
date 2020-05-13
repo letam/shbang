@@ -80,10 +80,15 @@ fi
 ## Create database on MySQL server
 echo "INFO: Creating database on MySQL server..."
 ssh $db_dest "
-	mysql_root_pw=\$(cat ~/.credentials/mysql_root_pw)
-	alias mysql=\"mysql -uroot -p\$mysql_root_pw\"
 
-	mysql -uroot -p\$mysql_root_pw -e \"
+	if command -v dnf >/dev/null; then
+		mysql_root_pw=\$(cat ~/.credentials/mysql_root_pw)
+		mysql=\"mysql -uroot -p\$mysql_root_pw\"
+	elif command -v apt >/dev/null; then
+		mysql='sudo mysql'
+	fi
+
+	\$mysql -e \"
 		CREATE DATABASE $db_name
 			DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 		CREATE USER '$db_user'@'$wordpress_host'
@@ -95,7 +100,7 @@ ssh $db_dest "
 	test \$? != 0 && >&2 cat /tmp/mysql-error && exit 1
 
 	### Confirm database exists
-	if ! mysql -uroot -p\$mysql_root_pw -Bse 'SHOW SCHEMAS;' \
+	if ! \$mysql -Bse 'SHOW SCHEMAS;' \
 		2>/dev/null | grep -q $db_name
 	then
 		>&2 echo 'Error: Database was not created.'
@@ -104,7 +109,7 @@ ssh $db_dest "
 	echo 'INFO: Database '$db_name' was created!'
 
 	### Confirm that user can connect from private IP address of Wordpress server
-	if ! mysql -uroot -p\$mysql_root_pw -Bse 'SELECT Host, User FROM mysql.user;' \
+	if ! \$mysql -Bse 'SELECT Host, User FROM mysql.user;' \
 		2>/dev/null | grep $db_user | grep -q $wordpress_host
 	then
 		>&2 echo 'Error: User was not created.'

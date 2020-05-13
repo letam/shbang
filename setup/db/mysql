@@ -12,12 +12,17 @@ echo "INFO [$(date)]: Begin creation of MySQL database and user named '$db_name'
 
 db_password="$(randpw)"
 
-
-## Get password for root MySQL user
-mysql_root_pw=$(cat /home/$USER/.credentials/mysql_root_pw)
-if [[ $mysql_root_pw = "" ]]; then
-	2>&1 echo "Missing password for root MySQL user in '/home/$USER/.credentials/mysql_root_pw'!"
-	exit 1
+## Get command to execute mysql as root, based on OS
+if command -v dnf >/dev/null; then
+	## Get password for root MySQL user
+	mysql_root_pw=$(cat /home/$USER/.credentials/mysql_root_pw)
+	if [[ $mysql_root_pw = "" ]]; then
+		2>&1 echo "Missing password for root MySQL user in '/home/$USER/.credentials/mysql_root_pw'!"
+		exit 1
+	fi
+	mysql_root="mysql -uroot -p$mysql_root_pw"
+elif command -v apt >/dev/null; then
+	mysql_root="sudo mysql"
 fi
 
 
@@ -38,7 +43,7 @@ cat >> $dir_db_credentials/$db_name <<-EOF
 
 ## Create database and user with privileges
 echo "INFO: Creating database '$db_name' and user '$db_user'..."
-mysql -uroot -p$mysql_root_pw -e "
+$mysql_root -e "
 	CREATE DATABASE $db_name DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 	CREATE USER '$db_user'@'localhost'
 		IDENTIFIED WITH caching_sha2_password BY '$db_password';

@@ -56,9 +56,15 @@ db_user="$db_name"
 ## Drop database on MySQL server
 echo "INFO: Dropping database on MySQL server..."
 ssh $db_dest "
-	mysql_root_pw=\$(cat ~/.credentials/mysql_root_pw)
 
-	mysql -uroot -p\$mysql_root_pw -e \"
+	if command -v dnf >/dev/null; then
+		mysql_root_pw=\$(cat ~/.credentials/mysql_root_pw)
+		mysql=\"mysql -uroot -p\$mysql_root_pw\"
+	elif command -v apt >/dev/null; then
+		mysql='sudo mysql'
+	fi
+
+	\$mysql -e \"
 		-- REVOKE ALL PRIVILEGES ON $db_name.* FROM '$db_user'@'$wordpress_private_ip';
 		-- FLUSH PRIVILEGES;
 		DROP USER IF EXISTS '$db_user'@'$wordpress_private_ip';
@@ -67,7 +73,7 @@ ssh $db_dest "
 	[[ \$? != 0 ]] && >&2 cat /tmp/mysql-error && exit 1
 
 	### Confirm database is gone
-	if mysql -uroot -p\$mysql_root_pw -Bse 'SHOW SCHEMAS;' \
+	if \$mysql -Bse 'SHOW SCHEMAS;' \
 		2>/dev/null | grep -q $db_name
 	then
 		>&2 echo 'Error: Database '$db_name' still exists.'
@@ -75,7 +81,7 @@ ssh $db_dest "
 	echo 'INFO: Confirmed that database '$db_name' does not exist.'
 
 	### Confirm that user is gone
-	if mysql -uroot -p\$mysql_root_pw -Bse 'SELECT Host, User FROM mysql.user;' \
+	if \$mysql -Bse 'SELECT Host, User FROM mysql.user;' \
 		2>/dev/null | grep $db_user | grep -q $wordpress_private_ip
 	then
 		>&2 echo 'Error: User still exists.'
