@@ -96,8 +96,9 @@ ssh $db_dest "
 	fi
 
 	## Remove user from pg_hba.conf
-	pgsql_version=\$(sudo -u postgres ls /var/lib/pgsql | sort -V | tail -1)
-	auth_conf=/var/lib/pgsql/\$pgsql_version/data/pg_hba.conf
+	pgsql_version=\$(sudo -u postgres \
+		psql -c '\\echo :VERSION' | cut -f 2 -d\" \" | cut -f1 -d.)
+	auth_conf=\$(sudo -u postgres psql -t -P format=unaligned -c 'SHOW hba_file')
 	backup=\$auth_conf.bak.\$(tmst)
 	sudo cp -p \$auth_conf \$backup
 

@@ -31,12 +31,19 @@ ssh $server "
 
 	pgsql_version=\$(sudo -i -u postgres psql -c '\\echo :VERSION' \
 		| cut -f2 -d' ' | cut -f1 -d.)
-	if ! sudo grep -q '^ssl = on' \$pgdata/postgresql.conf; then
-		sudo bak \$pgdata/postgresql.conf
+	pgsql_conf=\$(sudo -u postgres psql -t -P format=unaligned -c 'SHOW config_file')
+	if ! sudo grep -q '^ssl = on' \$pgsql_conf; then
+		sudo bak \$pgsql_conf
 		echo \"Enable SSL on server.\"
-		sudo sed -i -E 's/(#ssl =.*)/\\1\\nssl = on/' \$pgdata/postgresql.conf
+		sudo sed -i -E 's/(#ssl =.*)/\\1\\nssl = on/' \$pgsql_conf
 	fi
-	sudo systemctl restart postgresql-\$pgsql_version
+
+	if command -v dnf >/dev/null; then
+		postgresql_service=\"postgresql-\$pgsql_version\"
+	elif command -v apt >/dev/null; then
+		postgresql_service=\"postgresql@\$pgsql_version-main\"
+	fi
+	sudo systemctl restart \$postgresql_service
 	"
 
 
