@@ -22,6 +22,9 @@ is_centos() {
 is_ubuntu() {
 	[[ $(uname -a) =~ "Ubuntu" ]]
 }
+has_selinux() {
+	command -v getenforce >/dev/null && [[ $(getenforce) = Enforcing ]]
+}
 
 
 # Dependencies
@@ -63,13 +66,13 @@ sudo cp -pr /usr/share/nginx/html $html_dir
 cat /etc/nginx/conf.d/default.conf \
 	| sed -E "
 		s|([ \t]+listen .*) default_server|\1|;
-		s|(server_name[ \t]+)_|\1$domain|;
+		s/(server_name[ \t]+)(_|localhost)/\1$domain/;
 		s|([ \t]+root[ \t]+).*;$|\1$html_dir;|;
 	" | sudo tee $nginx_conf >/dev/null
 
 ### Set up logging
 sudo mkdir -vp /var/log/nginx/$domain
-if ! grep -q access_log $nginx_conf; then
+if ! grep -q '^\s*access_log' $nginx_conf; then
 	sudo sed -i -E "s|^(([ \t]*)root .*)$|\1\n\n\
 \2access_log   /var/log/nginx/$domain/access.log;\n\
 \2error_log    /var/log/nginx/$domain/error.log;|
@@ -97,22 +100,97 @@ sudo systemctl reload nginx
 
 
 ## SELinux settings
+if has_selinux; then
+	### Add SELinux label to allow Nginx to access nginx conf in project directory
+	#* Deals with: SELinux is preventing /usr/sbin/nginx from open access on the file $project_dir/nginx.conf.
+	#* $project_dir/nginx.conf default label should be httpd_sys_content_t
+	sudo /sbin/restorecon -v $project_dir/nginx.conf
 
-### Add SELinux label to allow Nginx to access nginx conf in project directory
-#* Deals with: SELinux is preventing /usr/sbin/nginx from open access on the file $project_dir/nginx.conf.
-#* $project_dir/nginx.conf default label should be httpd_sys_content_t
-sudo /sbin/restorecon -v $project_dir/nginx.conf
+	### Add SELinux label to allow Nginx to access all files in project directory
+	#* Deals with: SELinux is preventing /usr/sbin/nginx from getattr access on the file $project_dir/html/index.html.
+	#* $project_dir/html/index.html default label should be httpd_sys_content_t.
+	echo "Relabel $project_dir/html/* from unconfined_u:object_r:var_t:s0 to unconfined_u:object_r:httpd_sys_content_t:s0"
+	sudo /sbin/restorecon -R $project_dir/html/*
+	# TODO: Update (fine-tune) the labeling to apply only to HTML, CSS, JS, media
+fi
 
-### Add SELinux label to allow Nginx to access all files in project directory
-#* Deals with: SELinux is preventing /usr/sbin/nginx from getattr access on the file $project_dir/html/index.html.
-#* $project_dir/html/index.html default label should be httpd_sys_content_t.
-echo "Relabel $project_dir/html/* from unconfined_u:object_r:var_t:s0 to unconfined_u:object_r:httpd_sys_content_t:s0"
-sudo /sbin/restorecon -R $project_dir/html/*
-# TODO: Update (fine-tune) the labeling to apply only to HTML, CSS, JS, media
+
 
 
 ## Generate SSL cert for HTTPS connections
 
 ssl_domains=$(echo $server_names | tr " " ",")
-sudo certbot --nginx -n --agree-tos --register-unsafely-without-email --redirect --domains $ssl_domains --expand
+if is_centos; then
+	sudo certbot --nginx -n --agree-tos --register-unsafely-without-email --redirect --domains $ssl_domains --expand
+elif is_ubuntu; then
+	# TODO: Generate certificates without stopping web server
+	# Reference: https://certbot.eff.org/lets-encrypt/ubuntufocal-nginx
+	sudo systemctl stop nginx
+	sudo certbot certonly --standalone -n --agree-tos --register-unsafely-without-email --domains $ssl_domains --expand
+	sudo systemctl start nginx
+fi
+
+
+### Set additional settings for certbot SSL connections on Ubuntu
+set_nginx_ssl_conf() {
+
+	### Disable listening to port 80 (HTTP)
+	sed -i -E 's/(\s+listen\s+80;)/#\1/' $nginx_conf
+
+	### Remove (temporarily) closing brace of server block
+	sed -i 's/^\}//' $nginx_conf
+
+	### Add code specifying SSL options
+	cat >> $nginx_conf <<EOT
+	#listen [::]:443 http2 ssl ipv6only=on; # managed by setup/web/html
+    listen 443 http2 ssl; # managed by setup/web/html
+    ssl_certificate /etc/letsencrypt/live/$domain/fullchain.pem; # managed by setup/web/html
+    ssl_certificate_key /etc/letsencrypt/live/$domain/privkey.pem; # managed by setup/web/html
+    include /etc/letsencrypt/options-ssl-nginx.conf; # managed by setup/web/html
+    #ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem; # managed by setup/web/html
+
+}
+EOT
+
+	### Set server block to redirect connections from HTTP to HTTPS
+	if $is_not_subdomain; then
+		cat >> $nginx_conf <<EOT
+server {
+    if (\$host = www.$domain) {
+        return 301 https://\$host\$request_uri;
+    } # managed by setup/web/html
+
+
+    if (\$host = $domain) {
+        return 301 https://\$host\$request_uri;
+    } # managed by setup/web/html
+
+
+    listen       80;
+    listen       [::]:80;
+    server_name  $domain www.$domain;
+    return 404; # managed by setup/web/html
+}
+EOT
+	else
+		cat >> $nginx_conf <<EOT
+server {
+    if (\$host = $domain) {
+        return 301 https://\$host\$request_uri;
+    } # managed by setup/web/html
+
+
+    listen       80;
+    listen       [::]:80;
+    server_name  $domain;
+    return 404; # managed by setup/web/html
+}
+EOT
+	fi
+}
+
+if is_ubuntu; then
+	set_nginx_ssl_conf
+	sudo systemctl reload nginx
+fi
 

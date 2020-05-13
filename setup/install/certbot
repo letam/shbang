@@ -41,8 +41,43 @@ if ! command -v certbot >/dev/null; then
 				| sudo tee -a /etc/crontab >/dev/null
 		fi
 	elif is_ubuntu; then
-		sudo add-apt-repository -y ppa:certbot/certbot
-		sudo apt install -y python-certbot-nginx
+		# Reference: https://certbot.eff.org/lets-encrypt/ubuntufocal-nginx
+		sudo apt-get update
+		sudo apt-get install software-properties-common
+		sudo add-apt-repository universe
+		sudo apt-get update
+
+		sudo apt install -y certbot
 	fi
+fi
+
+
+## Add options from Let's Encrypt for SSL connections on Nginx
+### Attempt to get settings from GitHub before writing the file ourselves
+if [[ ! -f /etc/letsencrypt/options-ssl-nginx.conf ]]; then
+	(
+		cd /etc/letsencrypt
+		curl -LO https://github.com/certbot/certbot/raw/master/certbot-nginx/certbot_nginx/_internal/tls_configs/options-ssl-nginx.conf
+	)
+fi
+if [[ ! -f /etc/letsencrypt/options-ssl-nginx.conf ]]; then
+	# Source: https://github.com/certbot/certbot/blob/896c1e0b66817eff447b41f619772a6441b416df/certbot-nginx/certbot_nginx/_internal/tls_configs/options-ssl-nginx.conf
+	cat > /etc/letsencrypt/options-ssl-nginx.conf <<-"EOF"
+		# This file contains important security parameters. If you modify this file
+		# manually, Certbot will be unable to automatically provide future security
+		# updates. Instead, Certbot will print and log an error message with a path to
+		# the up-to-date file that you will need to refer to when manually updating
+		# this file.
+
+		ssl_session_cache shared:le_nginx_SSL:10m;
+		ssl_session_timeout 1440m;
+		ssl_session_tickets off;
+
+		ssl_protocols TLSv1.2 TLSv1.3;
+		ssl_prefer_server_ciphers off;
+
+		ssl_ciphers "ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384";
+		EOF
+
 fi
 
