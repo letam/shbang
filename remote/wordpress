@@ -32,10 +32,10 @@ min_mem_size_for_combined_server=1536000
 ## Check whether to set up connection to local MySQL server
 if [[ $db_dest = $wp_dest ]]; then
 	if ! ssh $wp_dest "command -v mysqld >/dev/null"; then
-		server_mem_size=$(ssh $app_dest "head -1 < /proc/meminfo | cut -f2 -d: | tr -s ' ' | cut -f2 -d' '")
+		server_mem_size=$(ssh $wp_dest "head -1 < /proc/meminfo | cut -f2 -d: | tr -s ' ' | cut -f2 -d' '")
 		if (( server_mem_size > min_mem_size_for_combined_server )); then
 			echo "INFO [$(date)]: Will set up Wordpress website connected to MySQL database server on same host..."
-			$(dirname $0)/install-program mysql $app_dest
+			$(dirname $0)/install-program mysqld $wp_dest --now
 		else
 			>&2 echo "Error: Server is too small to contain both Wordpress web app and MySQL server with default settings."
 			exit 1
@@ -147,6 +147,20 @@ fi
 ## Confirm that we can query MySQL server from Wordpress server
 echo "INFO: Checking status of connection to MySQL server from Wordpress server..."
 ssh $wp_dest "
+
+	## Install MySQL client if not found
+	if ! command -v mysql >/dev/null; then
+		printf \"INFO: Installing MySQL client on Wordpress host...\"
+		if command -v dnf >/dev/null; then
+			install_mysql=\"sudo dnf install -y mysql\"
+		elif command -v apt >/dev/null; then
+			install_mysql=\"sudo apt install -y mysql-client\"
+		fi
+		\$install_mysql \
+			2>&1 | sudo tee /var/log/setup/install/mysql
+		echo \" DONE! [\$(date)]\"
+	fi
+
 	source ~/.credentials/mysql/$db_name
 	if ! mysql -h\$db_host -u\$db_user -p\"\$db_password\" \$db_name -e 'status' 2>/tmp/mysql-error
 	then
