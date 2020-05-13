@@ -110,6 +110,16 @@ fi
 #mysql -uroot -p$mysql_root_pw -e "SHOW VARIABLES LIKE 'validate%';"
 
 
+### Bind address to allow connections to private IP address of machine only
+
+if grep -m1 "^bind-address\s*=\s*127.0.0.1" /etc/mysql/mysql.conf.d/mysqld.cnf; then
+	bak /etc/mysql/mysql.conf.d/mysqld.cnf
+	private_ip=$(cut -f1 -d/ <<< $(private-ip))
+	sed -i -E "s/(^bind-address\s*=\s*127.0.0.1)/#\1\nbind-address = $private_ip/" \
+		/etc/mysql/mysql.conf.d/mysqld.cnf
+fi
+
+
 #### Add rule to firewall
 #* Currently not used. Instead, we open the firewall on a case-by-case basis
 #* (i.e. we open up the MySQL server port for each IP address that requires access)

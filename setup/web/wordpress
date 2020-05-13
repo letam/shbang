@@ -31,18 +31,26 @@ if ! is_centos; then
 	exit 1
 fi
 
+[[ ! -d /var/log/setup/install ]] && mkdir -vp /var/log/setup/install
+
 ## Install Perl if not found
 if ! command -v perl >/dev/null; then
-	[[ ! -d /var/log/setup/install ]] && mkdir -vp /var/log/setup/install
 	printf "INFO: Installing Perl..."
 	sudo $(dirname $0)/../install/perl
 		2>&1 | tee /var/log/setup/install/perl >/dev/null
 	echo " DONE! [$(date)]"
 fi
 
+## Install Nginx if not found
+if ! command -v nginx >/dev/null; then
+	printf "INFO: Installing Nginx..."
+	sudo $(dirname $0)/../install/nginx \
+		2>&1 | tee /var/log/setup/install/nginx >/dev/null
+	echo " DONE! [$(date)]"
+fi
+
 ## Install PHP if not found
 if ! command -v php >/dev/null; then
-	[[ ! -d /var/log/setup/install ]] && mkdir -vp /var/log/setup/install
 	printf "INFO: Installing PHP..."
 	sudo $(dirname $0)/../install/php
 		2>&1 | tee /var/log/setup/install/php >/dev/null
@@ -51,7 +59,6 @@ fi
 
 ## Install MySQL client if not found
 if ! command -v mysql >/dev/null; then
-	[[ ! -d /var/log/setup/install ]] && mkdir -vp /var/log/setup/install
 	printf "INFO: Installing mysql..."
 	sudo dnf install -y mysql
 		2>&1 | tee /var/log/setup/install/mysql >/dev/null
