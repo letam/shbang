@@ -17,10 +17,10 @@ ssh $dest "
 		sudo dnf install -y tar | sudo tee /var/log/setup/install/tar >/dev/null
 		echo \" Done! [\$(date)]\"
 	fi
-	tar -vzxf letsencrypt.tgz && \
-	sudo mv -v letsencrypt /etc && \
-	sudo chown -R root:root /etc/letsencrypt && \
-	sudo restorecon -v -R /etc/letsencrypt
+	tar -vzxf letsencrypt.tgz
+	sudo mv -v letsencrypt /etc
+	sudo chown -R root:root /etc/letsencrypt
+	command -v restorecon >/dev/null && sudo restorecon -v -R /etc/letsencrypt || echo
 "
 
 [ $? = 0 ] && echo "Success!" || (echo "Failed!" && exit 1)
