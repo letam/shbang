@@ -14,6 +14,7 @@ is_ubuntu() {
 }
 
 
+install_certbot() {
 if ! command -v certbot >/dev/null; then
 	if is_centos; then
 		# Reference: https://certbot.eff.org/lets-encrypt/centosrhel8-nginx.html
@@ -50,6 +51,7 @@ if ! command -v certbot >/dev/null; then
 		sudo apt install -y certbot
 	fi
 fi
+}
 
 
 ## Add options from Let's Encrypt for SSL connections on Nginx
@@ -106,7 +108,10 @@ EOF
 }
 
 
-# Main
-get_options_ssl_nginx
-get_ssl_dhparams
+main() {
+	install_certbot
+	get_options_ssl_nginx
+	get_ssl_dhparams
+}
 
+main
