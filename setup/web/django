@@ -11,21 +11,13 @@ if [[ $domain = "" ]]; then
 	exit 1
 fi
 
-is_centos() {
-	[[ -f /etc/centos-release ]]
-}
-is_ubuntu() {
-	[[ $(uname -a) =~ "Ubuntu" ]]
+
+has_selinux() {
+	command -v getenforce >/dev/null && [[ $(getenforce) = Enforcing ]]
 }
 
 
 # Dependencies
-
-# TODO: Update code to work for Ubuntu
-if ! is_centos; then
-	>&2 echo "Error: Not yet implemented for this OS."
-	exit 1
-fi
 
 [[ ! -d /var/log/setup/install ]] && mkdir -vp /var/log/setup/install
 
@@ -61,8 +53,11 @@ if ! command -v perl >/dev/null; then
 	echo " DONE! [$(date)]"
 fi
 
-## Load SELinux policy settings
-$(dirname $0)/selinux-python-gunicorn-nginx $domain
+
+if has_selinux; then
+	## Load SELinux policy settings
+	$(dirname $0)/selinux-python-gunicorn-nginx $domain
+fi
 
 
 # Set variables for paths of interest
@@ -129,7 +124,11 @@ if [[ -f $psql_credentials_file ]]; then
 	echo "Proceeding to set up PostgreSQL connection..."
 
 	### Install Development files for building PostgreSQL client tools
-	sudo dnf install -y libpq-devel
+	if command -v dnf >/dev/null; then
+		sudo dnf install -y libpq-devel
+	elif command -v apt >/dev/null; then
+		sudo apt install -y libpq-dev
+	fi
 
 	### Install PostgreSQL adapter for Python and update requirements.txt
 	pip install psycopg2
@@ -209,19 +208,21 @@ manage() {
 manage migrate
 manage collectstatic --noinput
 
-# Restore SELinux context of files (default file label should be httpd_sys_content_t)
-echo "Relabel venv/lib/python$python_version/site-packages and all its contents from unconfined_u:object_r:var_t:s0 to unconfined_u:object_r:httpd_sys_content_t:s0"
-/sbin/restorecon -R venv/lib/python$python_version/site-packages
-echo "Relabel server/* from unconfined_u:object_r:var_t:s0 to unconfined_u:object_r:httpd_sys_content_t:s0"
-/sbin/restorecon -R server
-echo "Relabel static/* from unconfined_u:object_r:var_t:s0 to unconfined_u:object_r:httpd_sys_content_t:s0"
-/sbin/restorecon -R static
-echo "Relabel uploads/* from unconfined_u:object_r:var_t:s0 to unconfined_u:object_r:httpd_sys_content_t:s0"
-/sbin/restorecon -R uploads
-/sbin/restorecon -v secret_key.txt
-/sbin/restorecon -v venv/pyvenv.cfg
-/sbin/restorecon -v venv/bin/gunicorn
-/sbin/restorecon -v nginx.conf
+if command -v getenforce >/dev/null && [[ \$(getenforce) = Enforcing ]]; then
+	# Restore SELinux context of files (default file label should be httpd_sys_content_t)
+	echo "Relabel venv/lib/python$python_version/site-packages and all its contents from unconfined_u:object_r:var_t:s0 to unconfined_u:object_r:httpd_sys_content_t:s0"
+	/sbin/restorecon -R venv/lib/python$python_version/site-packages
+	echo "Relabel server/* from unconfined_u:object_r:var_t:s0 to unconfined_u:object_r:httpd_sys_content_t:s0"
+	/sbin/restorecon -R server
+	echo "Relabel static/* from unconfined_u:object_r:var_t:s0 to unconfined_u:object_r:httpd_sys_content_t:s0"
+	/sbin/restorecon -R static
+	echo "Relabel uploads/* from unconfined_u:object_r:var_t:s0 to unconfined_u:object_r:httpd_sys_content_t:s0"
+	/sbin/restorecon -R uploads
+	/sbin/restorecon -v secret_key.txt
+	/sbin/restorecon -v venv/pyvenv.cfg
+	/sbin/restorecon -v venv/bin/gunicorn
+	/sbin/restorecon -v nginx.conf
+fi
 
 EOF
 chmod +x build-prod
@@ -231,19 +232,21 @@ chmod +x build-prod
 ./manage-prod migrate
 ./manage-prod collectstatic --noinput
 
-# Restore SELinux context of files (default file label should be httpd_sys_content_t)
-echo "Relabel venv/lib/python$python_version/site-packages and all its contents from unconfined_u:object_r:var_t:s0 to unconfined_u:object_r:httpd_sys_content_t:s0"
-/sbin/restorecon -R venv/lib/python$python_version/site-packages
-echo "Relabel server/* from unconfined_u:object_r:var_t:s0 to unconfined_u:object_r:httpd_sys_content_t:s0"
-/sbin/restorecon -R server
-echo "Relabel static/* from unconfined_u:object_r:var_t:s0 to unconfined_u:object_r:httpd_sys_content_t:s0"
-/sbin/restorecon -R static
-echo "Relabel uploads/* from unconfined_u:object_r:var_t:s0 to unconfined_u:object_r:httpd_sys_content_t:s0"
-/sbin/restorecon -R uploads
-/sbin/restorecon -v secret_key.txt
-/sbin/restorecon -v venv/pyvenv.cfg
-/sbin/restorecon -v venv/bin/gunicorn
-/sbin/restorecon -v nginx.conf
+if has_selinux; then
+	# Restore SELinux context of files (default file label should be httpd_sys_content_t)
+	echo "Relabel venv/lib/python$python_version/site-packages and all its contents from unconfined_u:object_r:var_t:s0 to unconfined_u:object_r:httpd_sys_content_t:s0"
+	/sbin/restorecon -R venv/lib/python$python_version/site-packages
+	echo "Relabel server/* from unconfined_u:object_r:var_t:s0 to unconfined_u:object_r:httpd_sys_content_t:s0"
+	/sbin/restorecon -R server
+	echo "Relabel static/* from unconfined_u:object_r:var_t:s0 to unconfined_u:object_r:httpd_sys_content_t:s0"
+	/sbin/restorecon -R static
+	echo "Relabel uploads/* from unconfined_u:object_r:var_t:s0 to unconfined_u:object_r:httpd_sys_content_t:s0"
+	/sbin/restorecon -R uploads
+	/sbin/restorecon -v secret_key.txt
+	/sbin/restorecon -v venv/pyvenv.cfg
+	/sbin/restorecon -v venv/bin/gunicorn
+	/sbin/restorecon -v nginx.conf
+fi
 
 
 cd - >/dev/null
@@ -262,8 +265,10 @@ chown -R $SUDO_USER:adm $project_dir
 # Gunicorn Config
 $(dirname $0)/django-gunicorn-service $domain $project_dir
 
-## Restore SELinux context of gunicorn log
-sudo /sbin/restorecon -v /var/log/gunicorn/$domain.log
+if has_selinux; then
+	## Restore SELinux context of gunicorn log
+	sudo /sbin/restorecon -v /var/log/gunicorn/$domain.log
+fi
 
 
 # Nginx Config
@@ -330,8 +335,10 @@ ${tab}}
 
 }
 
-## Restore SELinux context of nginx.conf (i.e. after it's replaced) to allow /usr/sbin/nginx to access it
-/sbin/restorecon -v /var/www/$domain/nginx.conf
+if has_selinux; then
+	## Restore SELinux context of nginx.conf (i.e. after it's replaced) to allow /usr/sbin/nginx to access it
+	/sbin/restorecon -v /var/www/$domain/nginx.conf
+fi
 
 ## Reload Nginx after server configuration
 systemctl reload nginx
