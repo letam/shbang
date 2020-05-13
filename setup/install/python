@@ -8,67 +8,71 @@
 
 python_version=3.8.2
 
-## Get version number used in filename (Remove patch version number)
-file_version=$(cut -f 1,2 -d "." <<< $python_version)
-
-
-if ! command -v python3.8 >/dev/null; then
-	echo "INFO: Install Python $python_version..."
-else
-	>&2 echo "Python $python_version is already installed."
-	exit 1
-fi
+major_version=$(cut -f 1 -d "." <<< $python_version)
 
 
 if command -v dnf >/dev/null; then
 
-	## Download dependencies to compile Python source code
-	dnf install -y gcc openssl-devel bzip2-devel libffi-devel tar make
-	dnf install -y sqlite-devel.x86_64
+	if ! command -v python3.8 >/dev/null; then
+		echo "INFO: Install Python $python_version..."
 
-	## Install from source code
-	(
-		### Download source code bundle
-		cd /opt
-		file=Python-$python_version
-		curl -LO https://www.python.org/ftp/python/$python_version/$file.tgz
-		tar -zv -xf $file.tgz
+		## Download dependencies to compile Python source code
+		dnf install -y gcc openssl-devel bzip2-devel libffi-devel tar make
+		dnf install -y sqlite-devel.x86_64
 
-		### Compile and install
-		cd $file
-		./configure --enable-optimizations
-		make altinstall
-		rm -v $file.tgz
-	)
+		## Install from source code
+		(
+			### Download source code bundle
+			cd /opt
+			file=Python-$python_version
+			curl -LO https://www.python.org/ftp/python/$python_version/$file.tgz
+			tar -zv -xf $file.tgz
+
+			### Compile and install
+			cd $file
+			./configure --enable-optimizations
+			make altinstall
+			rm -v $file.tgz
+		)
+	else
+		>&2 echo "Python $python_version is already installed."
+	fi
+
+	## Create system links to access latest versions of python and pip by plain name (if possible)
+
+	### Get version number used in filename (Remove patch version number)
+	file_version=$(cut -f 1,2 -d "." <<< $python_version)
+
+	### Link python binary to latest version
+	ln -vs /usr/local/bin/python$file_version /usr/bin/python
+	ln -vs /usr/local/bin/python$file_version /usr/bin/python$major_version
+
+	### Link pip binary to latest version
+	if [[ -f /usr/local/bin/pip$file_version ]]; then
+		ln -vs /usr/local/bin/pip$file_version /usr/bin/pip
+		ln -vs /usr/local/bin/pip$file_version /usr/bin/pip$major_version
+	fi
+
+	## Update libraries pip and setuptools to latest versions
+	echo "INFO: Update libraries pip and setuptools to latest versions..."
+	pip install -U pip setuptools
 
 elif command -v apt >/dev/null; then
 
 	apt upgrade
-	apt install -y software-properties-common
 
-	## Install Python
-	add-apt-repository -y ppa:deadsnakes/ppa
-	apt install -y python$file_version python$file_version-venv
+	echo "NOTE: Python $(python3 -V | cut -f2 -d" ") is already installed on Ubuntu."
 
-fi
+	### Link python binary to latest version
+	ln -vs /usr/bin/python$major_version /usr/bin/python
 
+	## Install venv - Python virtual environment manager
+	apt install -y python$major_version-venv
 
-## Update libraries pip and setuptools to latest versions
-echo "INFO: Update libraries pip and setuptools to latest versions..."
-pip$file_version install -U pip setuptools
+	## Install PIP Python package installer
+	apt install -y python$major_version-pip
 
-
-## Create system links to access latest versions of python and pip by plain name (if possible)
-
-major_version=$(cut -f 1 -d "." <<< $python_version)
-
-### Link python binary to latest version
-ln -vs /usr/local/bin/python$file_version /usr/bin/python
-ln -vs /usr/local/bin/python$file_version /usr/bin/python$major_version
-
-### Link pip binary to latest version
-if [[ -f /usr/local/bin/pip$file_version ]]; then
-	ln -vs /usr/local/bin/pip$file_version /usr/bin/pip
-	ln -vs /usr/local/bin/pip$file_version /usr/bin/pip$major_version
+	### Link pip binary to latest version
+	ln -vs /usr/bin/pip$major_version /usr/bin/pip
 fi
 
