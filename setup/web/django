@@ -53,6 +53,14 @@ if ! command -v perl >/dev/null; then
 	echo " DONE! [$(date)]"
 fi
 
+## Install PostgreSQL client if not found
+if ! command -v psql >/dev/null; then
+	printf "INFO: Installing PostgreSQL client..."
+	sudo $(dirname $0)/../install/postgresql-client \
+		2>&1 | tee /var/log/setup/install/postgresql-client >/dev/null
+	echo " DONE! [$(date)]"
+fi
+
 
 if has_selinux; then
 	## Load SELinux policy settings
