@@ -15,21 +15,12 @@ fi
 
 # Auxiliary functions
 
-is_centos() {
-	[[ -f /etc/centos-release ]]
-}
-is_ubuntu() {
-	[[ $(uname -a) =~ "Ubuntu" ]]
+has_selinux() {
+	command -v getenforce >/dev/null && [[ $(getenforce) = Enforcing ]]
 }
 
 
 # Dependencies
-
-# TODO: Update code to work on Ubuntu
-if ! is_centos; then
-	>&2 echo "Error: Not yet implemented for this OS."
-	exit 1
-fi
 
 [[ ! -d /var/log/setup/install ]] && mkdir -vp /var/log/setup/install
 
@@ -59,8 +50,13 @@ fi
 
 ## Install MySQL client if not found
 if ! command -v mysql >/dev/null; then
-	printf "INFO: Installing mysql..."
-	sudo dnf install -y mysql
+	printf "INFO: Installing MySQL..."
+	if command -v dnf >/dev/null; then
+		install_mysql="sudo dnf install -y mysql"
+	elif command -v apt >/dev/null; then
+		install_mysql="sudo apt install -y mysql-client"
+	fi
+	$install_mysql \
 		2>&1 | tee /var/log/setup/install/mysql >/dev/null
 	echo " DONE! [$(date)]"
 fi
@@ -146,8 +142,13 @@ echo "Not found" > "$html_dir/404.html"
 
 
 ## Set correct permissions on files
-echo "Execute: chown -R $SUDO_USER:apache $html_dir"
-sudo chown -R "$SUDO_USER:apache" "$html_dir"
+if command -v dnf >/dev/null; then
+	php_fpm_group=apache
+elif command -v apt >/dev/null; then
+	php_fpm_group=www-data
+fi
+echo "Execute: chown -R $SUDO_USER:$php_fpm_group $html_dir"
+sudo chown -R "$SUDO_USER:$php_fpm_group" "$html_dir"
 sudo chmod -v g+w "$html_dir"
 
 echo "Execute: chmod -R g+w $html_dir/wp-content"
@@ -157,7 +158,9 @@ sudo -u $SUDO_USER mkdir -vp "$html_dir/wp-content/uploads"
 sudo chmod -v g+w "$html_dir/wp-content/uploads"
 
 ### SELinux file context for uploads directory
-sudo chcon -vt httpd_sys_rw_content_t "$html_dir/wp-content/uploads"
+if has_selinux; then
+	sudo chcon -vt httpd_sys_rw_content_t "$html_dir/wp-content/uploads"
+fi
 
 
 ## Nginx Config
@@ -189,8 +192,10 @@ echo -e "\nAutomate the \"famous five-minute WordPress installation\"..."
 echo -e "\nSetting up wp-config.php..."
 
 ### Set SELinux file context to temporarily allow server app to write to system at website directory
-sudo chcon -vt httpd_sys_rw_content_t "$html_dir"
-#* View file context of files in directory via: ls -l -Z "$html_dir"
+if has_selinux; then
+	sudo chcon -vt httpd_sys_rw_content_t "$html_dir"
+	#* View file context of files in directory via: ls -l -Z "$html_dir"
+fi
 
 
 ### Set database credentials
@@ -206,7 +211,10 @@ curl -si "https://$domain/wp-admin/setup-config.php?step=2" \
 	-XPOST \
 	--data "dbname=$db_name&uname=$db_user&pwd=$password_encoded&dbhost=$db_host&prefix=wp_&&submit=Submit" \
 	| head -1
-test $? != 0 && >&2 echo "INFO [$(date)]: Setup failed! 😧" && exit 1
+# TODO: Investigate why setup for Ubuntu 20.04 fails here
+if [[ ! -f $html_dir/wp-config.php ]]; then
+	>&2 echo "INFO [$(date)]: Setup failed! 😧" && exit 1
+fi
 
 #### Alternative method to set db credentials and authentication keys and salt
 #cd $html_dir
@@ -289,8 +297,10 @@ test $? != 0 && >&2 echo "INFO [$(date)]: Setup failed! 😧" && exit 1
 
 
 ### Restore SELinux default labels to disallow server app from writing to system at root website directory
-sudo restorecon -v "$html_dir"
-#ls -lZ "$html_dir"
+if has_selinux; then
+	sudo restorecon -v "$html_dir"
+	#ls -lZ "$html_dir"
+fi
 
 
 ## Allow wordpress to write to file system
@@ -299,9 +309,11 @@ echo -e "\n\n/** Allow Wordpress app to write to filesystem, to install plugins 
 
 
 ## Set SELinux permissions for wordpress to write to wp-content folder and descendants
-sudo restorecon -v "$html_dir/wp-content"
-echo "Set SELinux file context for all files in $html_dir/wp-content/*"
-sudo restorecon -R "$html_dir/wp-content/*"
+if has_selinux; then
+	sudo restorecon -v "$html_dir/wp-content"
+	echo "Set SELinux file context for all files in $html_dir/wp-content/*"
+	sudo restorecon -R "$html_dir/wp-content/*"
+fi
 
 
 echo "INFO [$(date)]: End of Wordpress setup!"
