@@ -43,6 +43,9 @@ if [[ $db_dest = $wp_dest ]]; then
 	fi
 else
 	echo "INFO [$(date)]: Begin provision of Wordpress website connected to MySQL database server on separate host..."
+	if ! ssh $db_dest "command -v mysqld >/dev/null"; then
+			$(dirname $0)/install-program mysqld $db_dest --now
+	fi
 fi
 
 
