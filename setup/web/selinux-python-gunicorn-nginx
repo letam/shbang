@@ -369,8 +369,6 @@ add_policy_files_generated_from_audit2allow() {
 	sudo tee $dir/python-name_connect-postgresql.te >/dev/null <<-"EOF"
 	module python-name_connect-postgresql 1.0;
 
-	module my-gunicorn 1.0;
-
 	require {
 		type postgresql_port_t;
 		type init_t;
