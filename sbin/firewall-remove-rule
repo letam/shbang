@@ -30,6 +30,9 @@ ufw_remove_rule() {
 	local ip_address=$(strip_cidr_suffix $ip_address)
 	rule_number=$(sudo ufw status numbered \
 		| grep "] $port/tcp\s" | grep "\s$ip_address" | cut -f 2 -d" " | tr -d ])
+	if [[ $rule_number = "" ]]; then
+		exit 1
+	fi
 	sudo ufw --force delete $rule_number
 }
 
