@@ -27,12 +27,13 @@ sudo -i -u postgres psql -c "
 sudo -i -u postgres psql -c "
 	CREATE USER $username PASSWORD '$password';
 	" || exit 1
+
 ### If password contains special char, then set password via file instead of string.
 ###* Note: The '$' in the value for PASSWORD in CLI command string fails.
 if [[ $password =~ \$ ]]; then
 	echo "ALTER USER $username PASSWORD '$password'" > .tmp_alter_password.psql
 	sudo -i -u postgres psql < .tmp_alter_password.psql
-	rm .tmp_alter_password
+	rm .tmp_alter_password.psql
 fi
 
 
