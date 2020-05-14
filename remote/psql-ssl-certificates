@@ -11,51 +11,64 @@ server=$1 ; shift
 client=$1 ; shift
 
 
-## Run script to generate key and certificates
-$(dirname $0)/../sbin/generate-ssl-certificates $hostname
+main() {
 
-cd ~/certs/$hostname
+	if server_crt_lt_90_days; then
+		echo "Certificate for PostgreSQL server is less than 90 days old."
+		echo "Skip generation of new 'server.key' and 'server.crt'"
+	else
+		## Run script to generate key and certificates
+		$(dirname $0)/../sbin/generate-ssl-certificates $hostname
 
+		## Transfer server key and cert to server
+		ssh $server "mkdir -vp ~/certs/$hostname"
+		(
+			cd ~/certs/$hostname
+			scp -p server.key server.crt $server:~/certs/$hostname
+		)
+		ssh $server "
+			echo \"Install 'server.key' and 'server.crt' for PostgreSQL server.\"
+			pgdata=\$(sudo -i -u postgres psql -t -c 'SHOW data_directory')
+			sudo cp -vp -t \$pgdata ~/certs/$hostname/server.{key,crt}
+			sudo chown postgres \$pgdata/server.key
 
-## Transfer server key and cert to server
-ssh $server "mkdir -vp ~/certs/$hostname"
-scp -p server.key server.crt $server:~/certs/$hostname
-ssh $server "
-	# TODO: Check if server key already exists
-	# TODO: Check if server key/cert needs to be replaced
+			pgsql_version=\$(sudo -i -u postgres psql -c '\\echo :VERSION' \
+				| cut -f2 -d' ' | cut -f1 -d.)
+			pgsql_conf=\$(sudo -u postgres psql -t -P format=unaligned -c 'SHOW config_file')
+			if ! sudo grep -q '^ssl = on' \$pgsql_conf; then
+				sudo bak \$pgsql_conf
+				echo \"Enable SSL on server.\"
+				sudo sed -i -E 's/(#ssl =.*)/\\1\\nssl = on/' \$pgsql_conf
+			fi
 
-	echo \"Install 'server.key' and 'server.crt' for PostgreSQL server.\"
-	pgdata=\$(sudo -i -u postgres psql -t -c 'SHOW data_directory')
-	sudo cp -vp -t \$pgdata ~/certs/$hostname/server.{key,crt}
-	sudo chown postgres \$pgdata/server.key
-
-	pgsql_version=\$(sudo -i -u postgres psql -c '\\echo :VERSION' \
-		| cut -f2 -d' ' | cut -f1 -d.)
-	pgsql_conf=\$(sudo -u postgres psql -t -P format=unaligned -c 'SHOW config_file')
-	if ! sudo grep -q '^ssl = on' \$pgsql_conf; then
-		sudo bak \$pgsql_conf
-		echo \"Enable SSL on server.\"
-		sudo sed -i -E 's/(#ssl =.*)/\\1\\nssl = on/' \$pgsql_conf
+			if command -v dnf >/dev/null; then
+				postgresql_service=\"postgresql-\$pgsql_version\"
+			elif command -v apt >/dev/null; then
+				postgresql_service=\"postgresql@\$pgsql_version-main\"
+			fi
+			sudo systemctl restart \$postgresql_service
+			"
 	fi
 
-	if command -v dnf >/dev/null; then
-		postgresql_service=\"postgresql-\$pgsql_version\"
-	elif command -v apt >/dev/null; then
-		postgresql_service=\"postgresql@\$pgsql_version-main\"
-	fi
-	sudo systemctl restart \$postgresql_service
-	"
+
+	## Transfer client cert to client
+	#* NOTE: Although the postgresql doc says to have root.crt on client, the connection seems to work without it.
+	#ssh $client "mkdir -vp ~/certs/$hostname"
+	#scp -p root.crt $client:~/certs/$hostname
+	#ssh $client "
+	#    pgdata=\$(sudo -i -u postgres psql -t -c 'SHOW data_directory')
+	#    sudo cp -vp ~/certs/$hostname/root.crt $pgdata
+	#    "
+}
 
 
-## Transfer client cert to client
-#* NOTE: Although the postgresql doc says to have root.crt on client, the connection seems to work without it.
-#ssh $client "mkdir -vp ~/certs/$hostname"
-#scp -p root.crt $client:~/certs/$hostname
-#ssh $client "
-#    pgdata=\$(sudo -i -u postgres psql -t -c 'SHOW data_directory')
-#    sudo cp -vp ~/certs/$hostname/root.crt $pgdata
-#    "
+server_crt_lt_90_days() {
+	ssh $server "
+		pgdata=\$(sudo -i -u postgres psql -t -c 'SHOW data_directory')
+		[[ -n \$(sudo find \$pgdata -maxdepth 1 -name server.crt -mtime -90 -print -quit) ]]
+		"
+}
 
 
-cd - >/dev/null
+main
 
