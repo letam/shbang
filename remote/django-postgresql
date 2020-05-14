@@ -120,6 +120,7 @@ ssh $app_dest "
 
 if [[ $db_host != $app_host ]]; then
 	echo "INFO: Allow PostgreSQL client connections from private IP address of web app server"
+	echo "INFO: Add firewall rule to allow connections from '$app_host' to '$db_host:$psql_port'..."
 	ssh $db_dest "sudo firewall-add-rule $psql_port $app_host"
 	$(dirname $0)/psql-ssl-certificates $website_name $db_dest $app_dest
 fi

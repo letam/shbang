@@ -148,6 +148,7 @@ ssh $wp_dest "
 
 if [[ $db_dest != $wp_dest ]]; then
 	echo "INFO: Allow MySQL client connections from private IP address of Wordpress server"
+	echo "INFO: Add firewall rule to allow connections from '$wordpress_host' to '$mysql_host:$mysql_port'..."
 	ssh $db_dest "sudo firewall-add-rule $mysql_port $wordpress_host"
 fi
 
