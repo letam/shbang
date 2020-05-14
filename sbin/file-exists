@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+
+# Return true if file exists
+
+argc=$#
+(( argc < 1 )) && >&2 echo "Usage: $0 FILE_PATH [OPTIONS]" && exit 1
+
+
+path=$1 ; shift
+options=$@
+
+if [[ $path =~ / ]]; then
+	dir=${path%/*}
+	file=${path##*/}
+else
+	dir=.
+	file=$path
+fi
+
+[[ -n "$(find "$dir" -name "$file" $options -print -quit)" ]]
+
