@@ -123,11 +123,28 @@ ssl_domains=$(echo $server_names | tr " " ",")
 if is_centos; then
 	sudo certbot --nginx -n --agree-tos --register-unsafely-without-email --redirect --domains $ssl_domains --expand
 elif is_ubuntu; then
-	# TODO: Generate certificates without stopping web server
 	# Reference: https://certbot.eff.org/lets-encrypt/ubuntufocal-nginx
-	sudo systemctl stop nginx
-	sudo certbot certonly --standalone -n --agree-tos --register-unsafely-without-email --domains $ssl_domains --expand
-	sudo systemctl start nginx
+
+	#### Option 1: Generate certificates via standalone plugin (Requires server shutdown)
+	#sudo systemctl stop nginx
+	#sudo certbot certonly --standalone -n --agree-tos --register-unsafely-without-email --domains $ssl_domains --expand
+	#sudo systemctl start nginx
+
+	### Option 2: Generate certificates via webroot plugin (No server shutdown required)
+	### Reference: https://github.com/wmnnd/nginx-certbot/blob/master/data/nginx/app.conf
+	add_location_certbot_acme_challenge() {
+		sudo sed -i -E "s|^((\s+)location / \{$)|\
+\2location /.well-known/acme-challenge/ {\n\
+\2\2root /var/www/certbot;\n\
+\2}\n\
+\n\
+\1|
+			" $nginx_conf
+	}
+	add_location_certbot_acme_challenge
+	sudo systemctl reload nginx
+	[ ! -d /var/www/certbot ] && mkdir -vp /var/www//certbot
+	sudo certbot certonly --webroot --webroot-path /var/www/certbot -n --agree-tos --register-unsafely-without-email --domains $ssl_domains --expand
 fi
 
 
@@ -156,6 +173,11 @@ EOT
 	if $is_not_subdomain; then
 		cat >> $nginx_conf <<EOT
 server {
+    location /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+    }
+
+
     if (\$host = www.$domain) {
         return 301 https://\$host\$request_uri;
     } # managed by Certbot via setup/web/html
@@ -175,6 +197,11 @@ EOT
 	else
 		cat >> $nginx_conf <<EOT
 server {
+    location /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+    }
+
+
     if (\$host = $domain) {
         return 301 https://\$host\$request_uri;
     } # managed by Certbot via setup/web/html
@@ -187,10 +214,11 @@ server {
 }
 EOT
 	fi
+
+	sudo systemctl reload nginx
 }
 
 if is_ubuntu; then
 	set_nginx_ssl_conf
-	sudo systemctl reload nginx
 fi
 
