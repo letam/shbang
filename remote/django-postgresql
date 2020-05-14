@@ -127,10 +127,15 @@ fi
 
 ## Confirm that we can query PostgreSQL database server from app server
 echo "INFO: Checking status of connection to PostgreSQL data server from web app server..."
+if ! ssh $app_dest "command -v psql >/dev/null"; then
+	echo "INFO: Installing PostgreSQL client on app host..."
+	$(dirname $0)/install-program postgresql-client $app_dest --now
+	echo "Done!"
+fi
 remote_command="
 	source ~/.credentials/psql/$db_name
 	export PGPASSWORD=\$db_password
-	psql "
+	PGCONNECT_TIMEOUT=1 psql "
 if [[ $db_host != "$app_host" ]]; then
 	remote_command+="-h$db_host "
 fi
@@ -138,14 +143,15 @@ remote_command+="-U\$db_user \$db_name -xc \"
 		select * from pg_stat_activity where datname = '\$db_name';
 		\" 2>/tmp/psql-error--$website_name \
 		| tail -n +1
-	if test \$? != 0; then
+	if test \${PIPESTATUS[0]} != 0; then
 		>&2 cat /tmp/psql-error--$website_name \
 		exit 1
 	fi
 	"
-ssh $app_dest "$remote_command" || exit 1
-
-echo "Success!"
+ssh $app_dest "$remote_command"
+test $? != 0 && \
+	>&2 echo "INFO [$(date)]: Error connecting to PostgreSQL server. 😧" && exit 1
+echo "Connection success!"
 
 
 ## Run setup script on remote server
