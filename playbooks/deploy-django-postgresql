@@ -23,6 +23,8 @@ user=$(cut -f1 -d@ <<< $dest)
 
 # Main
 
-./remote/teardown-django $domain $user@$domain $user@db.$domain && \
 ./remote/django-postgresql $domain $user@$domain $user@db.$domain
 
+
+## Note: To remove this application, execute the following command:
+## ./remote/teardown-django $domain $user@$domain $user@db.$domain
