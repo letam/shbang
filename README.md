@@ -24,7 +24,7 @@ But hey, with love and perseverance, it works!
 Elegance is not about perfection, but about doing well with what we have.
 
 ... Speaking of which. This project is in dire need of tests.
-But you can examine the results of script actions in the logs.
+But you can examine the results of script actions in the logs, which are placed in `/var/log/setup`.
 
 Documentation is WIP. But you're encouraged to explore the code, which aims
 to be as self-documenting as possible.
@@ -36,7 +36,7 @@ Contributions welcome.
 ## Requirements
 
 - A machine with SSH, Bash 4.4+ or ZSH, sed, grep
-- SSH access to server or VM running either CentOS 8 or Ubuntu 18.04 LTS
+- SSH access to server or VM running either CentOS 8 or Ubuntu 20.04 LTS
 
 ## Instructions
 
@@ -45,22 +45,22 @@ Contributions welcome.
 3. Have your SSH authorized keys for the server in a file somewhere. Let's say `~/tmp/authorized_keys`, for example.
 4. Then execute (or place into a script):
 	```
-	# Specify domain name or IP address of target server (**required**)
+	# Specify domain name or IP address of target server (required)
 	host=localhost
 
-	# Specify value of SSH authorized_keys to transfer (*optional*; default='')
+	# Specify value of SSH authorized_keys to transfer (optional; default='')
 	authorized_keys=$(cat ~/tmp/authorized_keys)
 
-	# Specify SSH Port (*optional*; default: 22)
+	# Specify SSH Port (optional; default: 22)
 	port=22
 
-	# Specify login user (*optional*; default: root)
+	# Specify login user (optional; default: root)
 	user=root
 
-	# Specify ssh_key for connection to host (*optional*; default: ~/.ssh/id_rsa)
+	# Specify ssh_key for connection to host (optional; default: ~/.ssh/id_rsa)
 	ssh_key=~/.ssh/id_rsa
 
-	# Specify username of newly created user (*optional*; default: smith)
+	# Specify username of newly created user (optional; default: smith)
 	new_user=ada
 
 	# Execute
@@ -84,15 +84,15 @@ If using hard-coded arguments directly in the command, then...
 ## Testing
 
 Scan a server's logs for errors via:
-	```
-	## Direct SSH command
-	ssh $user@$host "grep -r -i 'error[:!]' /var/log/setup"
-	```
-	OR
-	```
-	## Script provided by library (abstracts away command)
-	./remote/run-sbin $user@$host scan-logs-for-errors /var/log/setup
-	```
+```
+## Direct SSH command
+ssh $user@$host "grep -r -i 'error[:!]' /var/log/setup"
+```
+OR
+```
+## Script provided by library (abstracts away command)
+./remote/run-sbin $user@$host scan-logs-for-errors /var/log/setup
+```
 
 ## Homework Test
 
