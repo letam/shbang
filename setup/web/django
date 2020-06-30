@@ -139,8 +139,8 @@ if [[ -f $psql_credentials_file ]]; then
 	fi
 
 	### Install PostgreSQL adapter for Python and update requirements.txt
-	pip install psycopg2
-	pip list | grep "psycopg2 " | tr -s " " | sed "s/ /==/" >> requirements.txt
+	pip install psycopg2-binary
+	pip list | grep "psycopg2-binary " | tr -s " " | sed "s/ /==/" >> requirements.txt
 
 	cat >> server/config/settings_production.py <<EOF
 
