@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+
+# Update server settings /etc/php-fpm.d/www.conf appropriately for machine
+
+[[ $(id -u) != 0 ]] && >&2 echo "Error: Must be run as sudo/root." && exit 1
+
+# TODO: Get settings based on machine specs or provided arguments
+
+conf_file=/etc/php-fpm.d/www.conf
+
+## Map of settings
+declare -A map=(
+	["max_children"]="5"
+	["start_servers"]="2"
+	["min_spare_servers"]="1"
+	["max_spare_servers"]="3"
+)
+
+main() {
+	local replacements=""
+	for key in "${!map[@]}"; do
+		value=${map[$key]}
+		replacements+='s/(^pm\.'$key' =).*$/\1 '$value'/;'
+	done
+	bak $conf_file
+	sed -i -E "$replacements" "$conf_file"
+}
+
+main
+

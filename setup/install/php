@@ -187,3 +187,12 @@ else
 	echo "Error: Could not download composer.phar!"
 fi
 
+# Update server settings in /etc/php-fpm.d/www.conf for machine
+if command -v dnf >/dev/null; then
+	$(dirname $0)/../configure/php/fpm_www
+	systemctl reload php-fpm
+else
+	# TODO: Implement for Ubuntu
+	echo "INFO: Ensure that settings for php-fpm.d is appropriate for system."
+fi
+
