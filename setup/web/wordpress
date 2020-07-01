@@ -40,11 +40,11 @@ if ! command -v nginx >/dev/null; then
 	echo " DONE! [$(date)]"
 fi
 
-## Install PHP if not found
+## Install PHP-FPM if not found
 if ! command -v php >/dev/null; then
 	printf "INFO: Installing PHP..."
-	sudo $(dirname $0)/../install/php
-		2>&1 | tee /var/log/setup/install/php >/dev/null
+	sudo $(dirname $0)/../install/php-fpm
+		2>&1 | tee /var/log/setup/install/php-fpm >/dev/null
 	echo " DONE! [$(date)]"
 fi
 
