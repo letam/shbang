@@ -8,12 +8,17 @@
 
 conf_file=/etc/php-fpm.d/www.conf
 
+max_children=5
+start_servers=2
+min_spare_servers=1
+max_spare_servers=3
+
 ## Map of settings
 declare -A map=(
-	["max_children"]="5"
-	["start_servers"]="2"
-	["min_spare_servers"]="1"
-	["max_spare_servers"]="3"
+	["max_children"]="${max_children:5}"
+	["start_servers"]="$start_servers"
+	["min_spare_servers"]="$min_spare_servers"
+	["max_spare_servers"]="$max_spare_servers"
 )
 
 main() {
