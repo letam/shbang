@@ -12,13 +12,16 @@ html_dir="$1"
 echo "Update security context of all site files to allow wordpress app to write to entire directory."
 ls -l -Z $html_dir
 
-#sudo chcon -R unconfined_u:object_r:httpd_sys_rw_content_t:s0 $html_dir
-#sudo chcon unconfined_u:object_r:httpd_sys_rw_content_t:s0 $html_dir
+if command -v getenforce && [[ $(getenforce) = Enforcing ]]; then
+	#sudo chcon -R unconfined_u:object_r:httpd_sys_rw_content_t:s0 $html_dir
+	#sudo chcon unconfined_u:object_r:httpd_sys_rw_content_t:s0 $html_dir
 
-#sudo chcon -R -t httpd_sys_rw_content_t $html_dir
-sudo chcon -t httpd_sys_rw_content_t $html_dir
+	#sudo chcon -R -t httpd_sys_rw_content_t $html_dir
+	sudo chcon -t httpd_sys_rw_content_t $html_dir
 
-sudo restorecon -vR $html_dir
+	sudo restorecon -vR $html_dir
+fi
+
 sudo chmod g+w -R $html_dir
 
 echo "Updated context:"
