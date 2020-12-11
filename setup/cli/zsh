@@ -45,5 +45,8 @@ cat >> ~/.zimrc <<-'EOT'
 	# Pure prompt
 	zmodule sindresorhus/pure --source async.zsh --source pure.zsh
 
+	# forgit - A utility tool powered by fzf for using git interactively
+	zmodule wfxr/forgit --source forgit.plugin.zsh
+
 	EOT
 zsh -c 'source ~/.zshrc && zimfw install'
