@@ -29,6 +29,21 @@ if ! command -v python >/dev/null; then
 	echo " DONE! [$(date)]"
 fi
 
+## Ensure that Python's pip and venv are installed
+if command -v apt >/dev/null; then
+	if ! command -v pip >/dev/null; then
+		printf "INFO: Installing Python pip..."
+		sudo apt install -y python3-pip \
+			2>&1 | tee -a /var/log/setup/install/python3-pip >/dev/null
+		sudo ln -vs /usr/bin/pip3 /usr/bin/pip
+	fi
+	if ! dpkg -l | grep -q python3-venv; then
+		printf "INFO: Installing Python venv..."
+		sudo apt install -y python3-venv \
+			2>&1 | tee -a /var/log/setup/install/python3-venv >/dev/null
+	fi
+fi
+
 ## Install Nginx if not found
 if ! command -v nginx >/dev/null; then
 	printf "INFO: Installing Nginx..."
@@ -366,7 +381,7 @@ if [[ $status_code = 200 ]]; then
 	echo "Happy coding!"
 else
 	echo "Err... Request to server returns a $status_code response."
-	echo "Please contact me for help at tam@bitesizecode.ca!"
+	echo "Please contact me for help at tam@bitesizecode.ca."
 	exit 1
 fi
 
