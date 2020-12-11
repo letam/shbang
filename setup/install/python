@@ -6,14 +6,15 @@
 [[ $(id -u) != 0 ]] && >&2 echo "Error: Must be run as sudo/root." && exit 1
 
 
-python_version=3.8.3
+python_version=3.9.1
 
+minor_version=$(cut -f 1,2 -d "." <<< $python_version)
 major_version=$(cut -f 1 -d "." <<< $python_version)
 
 
 if command -v dnf >/dev/null; then
 
-	if ! command -v python3.8 >/dev/null; then
+	if ! command -v "python$minor_version" >/dev/null; then
 		echo "INFO: Install Python $python_version..."
 
 		## Download dependencies to compile Python source code
@@ -32,6 +33,7 @@ if command -v dnf >/dev/null; then
 			cd $file
 			./configure --enable-optimizations
 			make altinstall
+			cd -
 			rm -v $file.tgz
 		)
 	else
