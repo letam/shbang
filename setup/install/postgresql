@@ -40,7 +40,7 @@ install_client() {
 	if is_command dnf; then
 		dnf install -y postgresql$pgsql_version
 	elif is_command apt; then
-		apt install -y postgresql-client-$pgsql_version
+		apt install -y postgresql-client
 	fi
 }
 
@@ -51,14 +51,14 @@ install_server() {
 	if is_command dnf; then
 		dnf install -y postgresql$pgsql_version-server
 	elif is_command apt; then
-		apt install -y postgresql-$pgsql_version
+		apt install -y postgresql postgresql-contrib
 	fi
 
 	## Initialize database
 	if is_command dnf; then
 		/usr/pgsql-$pgsql_version/bin/postgresql-$pgsql_version-setup initdb
 	elif is_command apt; then
-		apt install -y postgresql-$pgsql_version
+		echo
 	fi
 
 	if is_command dnf; then
@@ -143,7 +143,7 @@ main() {
 		install_repository_rpm
 		disable_builtin_postgresql_module
 	elif is_command apt; then
-		echo
+		apt-get update
 	else
 		>&2 echo "Server OS not supported."
 		exit
