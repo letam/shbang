@@ -61,12 +61,16 @@ if command -v dnf >/dev/null; then
 
 elif command -v apt >/dev/null; then
 
-	apt upgrade
+	# Update packages list and install prerequisites
+	apt update
+	apt install software-properties-common
 
-	echo "NOTE: Python $(python3 -V | cut -f2 -d" ") is already installed on Ubuntu."
+	# Add deadsnakes PPa to system's sources list
+	add-apt-repository -y ppa:deadsnakes/ppa
+	apt install -y python$minor_version
 
 	### Link python binary to latest version
-	ln -vs /usr/bin/python$major_version /usr/bin/python
+	ln -vsf /usr/bin/python$minor_version /usr/bin/python
 
 	## Install venv - Python virtual environment manager
 	apt install -y python$major_version-venv
@@ -75,6 +79,6 @@ elif command -v apt >/dev/null; then
 	apt install -y python$major_version-pip
 
 	### Link pip binary to latest version
-	ln -vs /usr/bin/pip$major_version /usr/bin/pip
+	ln -vsf /usr/bin/pip$major_version /usr/bin/pip
 fi
 
