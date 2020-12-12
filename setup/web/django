@@ -161,8 +161,9 @@ if [[ -f $psql_credentials_file ]]; then
 
 import dj_database_url
 import urllib.parse
+import getpass
 
-with open("$psql_credentials_file") as fd:
+with open(f"/home/{getpass.getuser()}/.credentials/psql/$sql_friendly_name") as fd:
 	credentials = {
 		var: val.rstrip("\n")
 		for var, val in [
