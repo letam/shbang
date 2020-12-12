@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+
+# Install Go code compiler
+
+[[ $(id -u) != 0 ]] && >&2 echo "Error: Must be run as sudo/root." && exit 1
+
+
+echo Installing Go
+
+export GOVERSION=$(curl -Ss 'https://golang.org/VERSION?m=text')
+curl -LO https://golang.org/dl/$GOVERSION.linux-amd64.tar.gz
+tar -C /usr/local -xzf $GOVERSION.linux-amd64.tar.gz
+
+echo -e '\n# Set PATH so it includes go binaries\nexport PATH=$PATH:/usr/local/go/bin' >> ~/.profile
+if command -v zsh >/dev/null; then
+	echo -e '\n# Set PATH so it includes go binaries\nexport PATH=$PATH:/usr/local/go/bin' >> ~/.zprofile
+fi
+
+rm $GOVERSION.linux-amd64.tar.gz
