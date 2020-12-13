@@ -6,6 +6,10 @@
 [[ $(id -u) != 0 ]] && echo "Error: Must be run as sudo/root." && exit 1
 
 
+source "$(dirname "$0")/../versions"
+#echo $ubuntu_release
+
+
 is_centos() {
 	[[ -f /etc/centos-release ]]
 }
@@ -34,7 +38,7 @@ if ! command -v nginx >/dev/null; then
 
 	elif command -v apt >/dev/null; then
 		## Set to use official Nginx apt package repository for latest stable release
-		release=bionic
+		release=$ubuntu_release
 		sudo tee /etc/apt/sources.list.d/nginx.list >/dev/null <<-EOF
 			deb https://nginx.org/packages/ubuntu/ $release nginx
 			deb-src https://nginx.org/packages/ubuntu/ $release nginx
