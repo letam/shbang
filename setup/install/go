@@ -5,15 +5,22 @@
 [[ $(id -u) != 0 ]] && >&2 echo "Error: Must be run as sudo/root." && exit 1
 
 
-echo Installing Go
-
+## Get latest version name
 export GOVERSION=$(curl -Ss 'https://golang.org/VERSION?m=text')
+
+echo "INFO: Install Go '$GOVERSION'..."
+
+## Download and extract to install latest code
 curl -LO https://golang.org/dl/$GOVERSION.linux-amd64.tar.gz
 tar -C /usr/local -xzf $GOVERSION.linux-amd64.tar.gz
 
+## Update PATH environment variable of login shell sessions
+[[ -f ~/.profile ]] && bak ~/.profile
 echo -e '\n# Set PATH so it includes go binaries\nexport PATH=$PATH:/usr/local/go/bin' >> ~/.profile
 if command -v zsh >/dev/null; then
+	[[ -f ~/.zprofile ]] && bak ~/.zprofile
 	echo -e '\n# Set PATH so it includes go binaries\nexport PATH=$PATH:/usr/local/go/bin' >> ~/.zprofile
 fi
 
+## Clean up
 rm $GOVERSION.linux-amd64.tar.gz
