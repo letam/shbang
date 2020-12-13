@@ -34,7 +34,7 @@ if ! command -v nginx >/dev/null; then
 		latest_stream=$(dnf module list nginx | grep "^nginx\s" | tail -1 | cut -f2 -d" ")
 		sudo dnf module enable -y nginx:$latest_stream
 
-		sudo dnf install -y nginx
+		sudo dnf install -y nginx nginx-module-njs
 
 	elif command -v apt >/dev/null; then
 		## Set to use official Nginx apt package repository for latest stable release
@@ -48,7 +48,7 @@ if ! command -v nginx >/dev/null; then
 			&& sudo apt-key add ./nginx_signing.key && rm ./nginx_signing.key
 
 		sudo apt update || exit 1
-		sudo apt install -y nginx
+		sudo apt install -y nginx nginx-module-njs
 	fi
 else
 	echo "Nginx is already installed."
