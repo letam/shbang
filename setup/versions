@@ -1,3 +1,6 @@
 
 ubuntu_release=focal  # 20.04 LTS
+centos_version=8
+
+php_version=8.0
 

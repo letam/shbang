@@ -5,9 +5,9 @@
 [[ $(id -u) != 0 ]] && echo "Error: Must be run as sudo/root." && exit 1
 
 
-php_version=7.4
-
-centos_version=8
+source "$(dirname "$0")/../versions"
+#echo $php_version
+#echo $centos_version
 
 
 systemctl list-unit-files | grep -q "php[^ ]*-fpm" \
@@ -54,9 +54,9 @@ elif command -v apt >/dev/null; then
 	apt update
 
 	# Install latest PHP-FPM
-	apt install -y php-fpm
+	apt install -y php$php_version-fpm
 	# Install additional packages
-	apt install -y php-mbstring
+	apt install -y php$php_version-mbstring
 
 fi
 
