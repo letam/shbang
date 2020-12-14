@@ -327,7 +327,15 @@ ${tab}# server 192.168.0.7:8000 fail_timeout=0;
 	perl -i -p0e "
 		s|^(\s+location / \{)[^\}]*\}\n\
 |\1
-#${tab}${tab}try_files \\\$uri \\\$uri/ /index.php\\\$is_args\\\$args;
+
+# Direct visitor to static files in '$html_dir' dir
+#${tab}${tab}try_files \\\$uri \\\$uri/ /index.php\\\$is_args\\\$args =404;
+
+# Direct visitor to Django app server
+${tab}${tab}try_files \\\$uri \@proxy_to_app;
+${tab}}
+
+${tab}location /admin/ {
 ${tab}${tab}try_files \\\$uri \@proxy_to_app;
 ${tab}}
 
