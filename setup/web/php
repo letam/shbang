@@ -1,0 +1,114 @@
+#!/usr/bin/env bash
+
+# Set up PHP website and serve with PHP-FPM and Nginx
+
+[[ $(id -u) != 0 ]] && >&2 echo "Error: Must be run as sudo/root." && exit 1
+
+# Arguments
+
+domain=$1
+if [[ $domain = "" ]]; then
+	>&2 echo "Error: Argument for domain required."
+	exit 1
+fi
+
+
+# Auxiliary functions
+
+has_selinux() {
+	command -v getenforce >/dev/null && [[ $(getenforce) = Enforcing ]]
+}
+
+
+# Dependencies
+
+[[ ! -d /var/log/setup/install ]] && mkdir -vp /var/log/setup/install
+
+## Install Perl if not found
+if ! command -v perl >/dev/null; then
+	printf "INFO: Installing Perl..."
+	sudo $(dirname $0)/../install/perl
+		2>&1 | tee /var/log/setup/install/perl >/dev/null
+	echo " DONE! [$(date)]"
+fi
+
+## Install Nginx if not found
+if ! command -v nginx >/dev/null; then
+	printf "INFO: Installing Nginx..."
+	sudo $(dirname $0)/../install/nginx \
+		2>&1 | tee /var/log/setup/install/nginx >/dev/null
+	echo " DONE! [$(date)]"
+fi
+
+## Install PHP-FPM if not found
+if ! command -v php >/dev/null; then
+	printf "INFO: Installing PHP..."
+	sudo $(dirname $0)/../install/php-fpm
+		2>&1 | tee /var/log/setup/install/php-fpm >/dev/null
+	echo " DONE! [$(date)]"
+fi
+
+# Main
+
+echo "INFO [$(date)]: Begin PHP setup."
+
+
+## Set variables for paths of interest
+project_dir=/var/www/$domain
+html_dir=/var/www/$domain/html
+nginx_conf=/var/www/$domain/nginx.conf
+
+
+if [[ -d $project_dir ]]; then
+	>&2 echo "Error: Project directory '$project_dir' already exists. Aborting."
+	exit 1
+fi
+
+
+## Set up HTML website
+$(dirname $0)/html $domain
+test $? != 0 && >&2 echo "INFO [$(date)]: Setup failed! 😧" && exit 1
+
+
+## Add index.php file
+cat > "$html_dir/index.php" <<EOF
+<html>
+<head>
+<title>PHP Test</title>
+
+</head>
+
+<body>
+<?php echo '<p>Hello World</p>'; ?>
+
+</body>
+</html>
+EOF
+bak "$html_dir/index.html"
+
+
+## Add 50x and 404 files
+[[ -f $html_dir/50x.html ]] || echo "Error" > "$html_dir/50x.html"
+[[ -f $html_dir/404.html ]] || echo "Not found" > "$html_dir/404.html"
+
+
+## Nginx Config
+bak "$nginx_conf"
+{
+	tab=$(grep -m1 -E "^\s+.*" "$nginx_conf" | sed -E "s|^([ \t]+).*|\1|")
+
+	## Set location blocks for php pages and wp-admin
+	#perl -i -pe "BEGIN{undef $/;}
+	perl -i -p0e "
+		s|^(\s+location / \{)[^\}]*\}\n\
+|\1
+${tab}${tab}try_files $uri $uri/ =404;
+${tab}}
+|m" "$nginx_conf"
+
+}
+systemctl reload nginx
+
+
+echo "INFO [$(date)]: End of PHP Website setup!"
+
