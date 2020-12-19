@@ -6,7 +6,9 @@
 [[ $(id -u) != 0 ]] && >&2 echo "Error: Must be run as sudo/root." && exit 1
 
 
-python_version=3.9.1
+source "$(dirname "$0")/../versions"
+#echo $python_version
+
 
 minor_version=$(cut -f 1,2 -d "." <<< $python_version)
 major_version=$(cut -f 1 -d "." <<< $python_version)

@@ -2,6 +2,8 @@
 ubuntu_release=focal  # 20.04 LTS
 centos_version=8
 
+python_version=3.9.1
+
 php_version=8.0
 
 mysql_version=8.0
