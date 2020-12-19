@@ -169,6 +169,7 @@ ssh $wp_dest "
 		elif command -v apt >/dev/null; then
 			install_mysql=\"sudo apt install -y mysql-client-core-$mysql_version\"
 		fi
+		[[ -d /var/log/setup/install ]] || sudo mkdir -vp /var/log/setup/install
 		\$install_mysql \
 			2>&1 | sudo tee /var/log/setup/install/mysql
 		echo \" DONE! [\$(date)]\"
