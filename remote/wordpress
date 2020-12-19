@@ -122,7 +122,7 @@ ssh $db_dest "
 		>&2 echo 'Error: User was not created.'
 		exit 1
 	fi
-	echo 'INFO: User '$db_user'@'$wordpress_host' was created!'
+	echo 'INFO: MySQL user '$db_user'@'$wordpress_host' was created!'
 	"
 test $? != 0 && >&2 echo "Failed... 😔" && exit 1
 echo "Success!"
