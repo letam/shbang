@@ -24,6 +24,10 @@ sbin=$(dirname $0)/../sbin
 	&& >&2 echo "Invalid connection value for database server." && usage
 
 
+source "$(dirname "$0")/../setup/versions"
+#echo $mysql_version
+
+
 mysql_port=3306
 
 min_mem_size_for_combined_server=1536000
@@ -163,7 +167,7 @@ ssh $wp_dest "
 		if command -v dnf >/dev/null; then
 			install_mysql=\"sudo dnf install -y mysql\"
 		elif command -v apt >/dev/null; then
-			install_mysql=\"sudo apt install -y mysql-client\"
+			install_mysql=\"sudo apt install -y mysql-client-core-$mysql_version\"
 		fi
 		\$install_mysql \
 			2>&1 | sudo tee /var/log/setup/install/mysql
