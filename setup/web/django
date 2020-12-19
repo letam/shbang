@@ -42,6 +42,12 @@ if command -v apt >/dev/null; then
 		sudo apt install -y python3-venv \
 			2>&1 | tee -a /var/log/setup/install/python3-venv >/dev/null
 	fi
+	if [[ ! -f /usr/bin/python-venv ]]; then
+		printf "INFO: Creating shortcut for python-venv..."
+		sudo echo -e '#!/usr/bin/env bash\n\npython3 -m venv "$@"' \
+			| sudo tee /usr/bin/python-venv >/dev/null
+		sudo chmod +x /usr/bin/python-venv
+	fi
 fi
 
 ## Install Nginx if not found
@@ -98,7 +104,7 @@ $(dirname $0)/html $domain || exit 1
 cd $project_dir
 
 ## Setup virtualenv
-python -m venv venv
+python-venv venv
 source venv/bin/activate
 pip install --upgrade pip setuptools
 pip install Django dj-database-url gunicorn meinheld

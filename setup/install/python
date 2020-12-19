@@ -51,6 +51,16 @@ if command -v dnf >/dev/null; then
 	ln -vs /usr/local/bin/python$file_version /usr/bin/python
 	ln -vs /usr/local/bin/python$file_version /usr/bin/python$major_version
 
+	### Create shortcut to system Python venv
+	if [[ ! -f /usr/bin/python-venv ]]; then
+		cat > /usr/bin/python-venv <<-EOF
+			#!/usr/bin/env bash
+
+			python$major_version -m venv "\$@"
+		EOF
+		chmod +x /usr/bin/python-venv
+	fi
+
 	### Link pip binary to latest version
 	if [[ -f /usr/local/bin/pip$file_version ]]; then
 		ln -vs /usr/local/bin/pip$file_version /usr/bin/pip
@@ -76,6 +86,16 @@ elif command -v apt >/dev/null; then
 
 	## Install venv - Python virtual environment manager
 	apt install -y python$major_version-venv
+
+	### Create shortcut to system Python venv
+	if [[ ! -f /usr/bin/python-venv ]]; then
+		cat > /usr/bin/python-venv <<-EOF
+			#!/usr/bin/env bash
+
+			python$major_version -m venv "\$@"
+		EOF
+		chmod +x /usr/bin/python-venv
+	fi
 
 	## Install PIP Python package installer
 	apt install -y python$major_version-pip
