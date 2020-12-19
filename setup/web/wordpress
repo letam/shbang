@@ -308,7 +308,7 @@ curl -si "https://$domain/wp-admin/install.php?step=2" \
 	-XPOST \
 	-H "Content-Type: application/x-www-form-urlencoded" \
 	--data "weblog_title=$website_title&user_name=$wp_user&admin_password=$password_encoded&admin_password2=$password_encoded&admin_email=$wp_user_email&Submit=Install+WordPress" \
-	| head -1
+	| tac | tac | head -1
 test $? != 0 && >&2 echo "INFO [$(date)]: Setup failed! 😧" && exit 1
 
 
