@@ -168,9 +168,9 @@ if ! systemctl -q is-active "$cron_service"; then
 fi
 
 
-# Enable automatic security updates to system
+# Enable automatic security updates on system
+echo "INFO: Configure automatic security updates on system."
 if has_dnf; then
-	echo "INFO: Enable automatic security updates to system."
 	# TODO: Look into throttling download speeds when downloading automatic updates
 	sudo dnf install -y dnf-automatic
 	sudo bak /etc/dnf/automatic.conf
@@ -185,7 +185,17 @@ if has_dnf; then
 	fi
 	sudo systemctl enable --now dnf-automatic.timer
 elif has_apt; then
-	echo "TODO: Enable automatic security updates on Ubuntu server."
+	# Reference: https://wiki.debian.org/UnattendedUpgrades
+	if ! command -v unattended-upgrades >/dev/null; then
+		sudo apt install -y unattended-upgrades
+	fi
+	## Activate unattended-upgrades
+	if [[ ! -f /etc/apt/apt.conf.d/20auto-upgrades ]]; then
+		cat > /etc/apt/apt.conf.d/20auto-upgrades <<-EOT
+			APT::Periodic::Update-Package-Lists "1";
+			APT::Periodic::Unattended-Upgrade "1";
+		EOT
+	fi
 fi
 
 
