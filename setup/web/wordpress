@@ -13,6 +13,10 @@ if [[ $domain = "" ]]; then
 fi
 
 
+source "$(dirname "$0")/../versions"
+#echo $php_version
+
+
 # Auxiliary functions
 
 has_selinux() {
@@ -59,6 +63,12 @@ if ! command -v mysql >/dev/null; then
 	$install_mysql \
 		2>&1 | tee /var/log/setup/install/mysql >/dev/null
 	echo " DONE! [$(date)]"
+fi
+
+## Install additional PHP extensions needed for Wordpress
+if command -v apt >/dev/null; then
+	apt update -y
+	apt install -y php$php_version-curl php$php_version-gd php$php_version-intl php$php_version-mbstring php$php_version-mysql php$php_version-soap php$php_version-xml php$php_version-zip
 fi
 
 
