@@ -90,8 +90,8 @@ elif command -v apt >/dev/null; then
 	apt install -y python$major_version-venv
 
 	### Create shortcut to system Python venv
-	if [[ ! -f /usr/bin/python-venv ]]; then
-		cat > /usr/bin/python-venv <<-EOF
+	if [[ ! -f /usr/local/bin/python-venv ]]; then
+		cat > /usr/local/bin/venv <<-EOF
 			#!/usr/bin/env bash
 
 			python$major_version -m venv "\$@"
@@ -104,6 +104,6 @@ elif command -v apt >/dev/null; then
 	apt install -y python$major_version-pip
 
 	### Link pip binary to latest version
-	ln -vsf /usr/bin/pip$major_version /usr/bin/pip
+	ln -vsf /usr/bin/pip$major_version /usr/local/bin/pip
 fi
 

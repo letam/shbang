@@ -51,11 +51,11 @@ if command -v apt >/dev/null; then
 		sudo apt install -y "python$version-venv" \
 			2>&1 | tee -a "/var/log/setup/install/python$version-venv" >/dev/null
 	fi
-	if [[ ! -f /usr/bin/python-venv ]]; then
+	if [[ ! -f /usr/local/bin/python-venv ]]; then
 		printf "INFO: Creating shortcut for python-venv..."
 		sudo echo -e '#!/usr/bin/env bash\n\npython'$version' -m venv "$@"' \
-			| sudo tee /usr/bin/python-venv >/dev/null
-		sudo chmod +x /usr/bin/python-venv
+			| sudo tee /usr/local/bin/python-venv >/dev/null
+		sudo chmod +x /usr/local/bin/python-venv
 	fi
 fi
 
