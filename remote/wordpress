@@ -167,6 +167,7 @@ ssh $wp_dest "
 		if command -v dnf >/dev/null; then
 			install_mysql=\"sudo dnf install -y mysql\"
 		elif command -v apt >/dev/null; then
+			sudo apt update
 			install_mysql=\"sudo apt install -y mysql-client-core-$mysql_version\"
 		fi
 		[[ -d /var/log/setup/install ]] || sudo mkdir -vp /var/log/setup/install
