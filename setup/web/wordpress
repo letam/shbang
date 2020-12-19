@@ -66,9 +66,15 @@ if ! command -v mysql >/dev/null; then
 fi
 
 ## Install additional PHP extensions needed for Wordpress
-if command -v apt >/dev/null; then
-	apt update -y
-	apt install -y php$php_version-curl php$php_version-gd php$php_version-intl php$php_version-mbstring php$php_version-mysql php$php_version-soap php$php_version-xml php$php_version-zip
+if [[ ! -f /var/log/setup/install/wordpress-php-extensions ]]; then
+	printf "INFO: Installing PHP extensions required by Wordpress..."
+	if command -v apt >/dev/null; then
+		echo "INFO [$(date)]:" > /var/log/setup/install/wordpress-php-extensions
+		apt update -y >/dev/null
+		apt install -y php$php_version-curl php$php_version-gd php$php_version-intl php$php_version-mbstring php$php_version-mysql php$php_version-soap php$php_version-xml php$php_version-zip \
+			2>&1 | tee -a /var/log/setup/install/wordpress-php-extensions >/dev/null
+	fi
+	echo " DONE! [$(date)]"
 fi
 
 
