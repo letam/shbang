@@ -49,7 +49,7 @@ if command -v dnf >/dev/null; then
 elif command -v apt >/dev/null; then
 	# Set to use ondrej/php repository for latest version
 	#* Source: https://launchpad.net/~ondrej/+archive/ubuntu/php/
-	apt install software-properties-common
+	apt install -y software-properties-common
 	add-apt-repository -y ppa:ondrej/php
 	apt update
 

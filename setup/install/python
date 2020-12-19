@@ -63,7 +63,7 @@ elif command -v apt >/dev/null; then
 
 	# Update packages list and install prerequisites
 	apt update
-	apt install software-properties-common
+	apt install -y software-properties-common
 
 	# Add deadsnakes PPa to system's sources list
 	add-apt-repository -y ppa:deadsnakes/ppa
