@@ -12,6 +12,14 @@ if [[ $domain = "" ]]; then
 fi
 
 
+source "$(dirname "$0")/../versions"
+#echo $python_version
+
+
+python_minor_version=$(cut -f 1,2 -d "." <<< $python_version)
+python_major_version=$(cut -f 1 -d "." <<< $python_version)
+
+
 has_selinux() {
 	command -v getenforce >/dev/null && [[ $(getenforce) = Enforcing ]]
 }
@@ -21,9 +29,9 @@ has_selinux() {
 
 [[ ! -d /var/log/setup/install ]] && mkdir -vp /var/log/setup/install
 
-## Install Python if not found
-if ! command -v python >/dev/null; then
-	printf "INFO: Installing Python..."
+## Ensure that latest Python is installed
+if ! command -v "python$python_minor_version" >/dev/null; then
+	printf "INFO: Installing latest Python..."
 	sudo $(dirname $0)/../install/python \
 		2>&1 | tee -a /var/log/setup/install/python >/dev/null
 	echo " DONE! [$(date)]"
@@ -31,20 +39,21 @@ fi
 
 ## Ensure that Python's pip and venv are installed
 if command -v apt >/dev/null; then
+	version=$python_major_version
 	if ! command -v pip >/dev/null; then
 		printf "INFO: Installing Python pip..."
-		sudo apt install -y python3-pip \
-			2>&1 | tee -a /var/log/setup/install/python3-pip >/dev/null
-		sudo ln -vs /usr/bin/pip3 /usr/bin/pip
+		sudo apt install -y "python$version-pip" \
+			2>&1 | tee -a "/var/log/setup/install/python$version-pip" >/dev/null
+		sudo ln -vs "/usr/bin/pip$version" /usr/bin/pip
 	fi
-	if ! dpkg -l | grep -q python3-venv; then
+	if ! dpkg -l | grep -q "python$version-venv"; then
 		printf "INFO: Installing Python venv..."
-		sudo apt install -y python3-venv \
-			2>&1 | tee -a /var/log/setup/install/python3-venv >/dev/null
+		sudo apt install -y "python$version-venv" \
+			2>&1 | tee -a "/var/log/setup/install/python$version-venv" >/dev/null
 	fi
 	if [[ ! -f /usr/bin/python-venv ]]; then
 		printf "INFO: Creating shortcut for python-venv..."
-		sudo echo -e '#!/usr/bin/env bash\n\npython3 -m venv "$@"' \
+		sudo echo -e '#!/usr/bin/env bash\n\npython'$version' -m venv "$@"' \
 			| sudo tee /usr/bin/python-venv >/dev/null
 		sudo chmod +x /usr/bin/python-venv
 	fi
@@ -221,7 +230,7 @@ EOF
 chmod +x manage-prod
 
 ### Create script to build project for production in the future
-python_version=$(python -V 2>&1 | cut -f 2 -d " " | cut -f 1,2 -d ".")
+python_minor_version=$(python -V 2>&1 | cut -f 2 -d " " | cut -f 1,2 -d ".")
 cat > build-prod <<EOF
 #!/usr/bin/env bash
 
@@ -239,9 +248,10 @@ manage migrate
 manage collectstatic --noinput
 
 if command -v getenforce >/dev/null && [[ \$(getenforce) = Enforcing ]]; then
+	version=$python_minor_version
 	# Restore SELinux context of files (default file label should be httpd_sys_content_t)
-	echo "Relabel venv/lib/python$python_version/site-packages and all its contents from unconfined_u:object_r:var_t:s0 to unconfined_u:object_r:httpd_sys_content_t:s0"
-	/sbin/restorecon -R venv/lib/python$python_version/site-packages
+	echo "Relabel venv/lib/python$version/site-packages and all its contents from unconfined_u:object_r:var_t:s0 to unconfined_u:object_r:httpd_sys_content_t:s0"
+	/sbin/restorecon -R venv/lib/python$version/site-packages
 	echo "Relabel server/* from unconfined_u:object_r:var_t:s0 to unconfined_u:object_r:httpd_sys_content_t:s0"
 	/sbin/restorecon -R server
 	echo "Relabel static/* from unconfined_u:object_r:var_t:s0 to unconfined_u:object_r:httpd_sys_content_t:s0"
@@ -264,8 +274,9 @@ chmod +x build-prod
 
 if has_selinux; then
 	# Restore SELinux context of files (default file label should be httpd_sys_content_t)
-	echo "Relabel venv/lib/python$python_version/site-packages and all its contents from unconfined_u:object_r:var_t:s0 to unconfined_u:object_r:httpd_sys_content_t:s0"
-	/sbin/restorecon -R venv/lib/python$python_version/site-packages
+	version=$python_minor_version
+	echo "Relabel venv/lib/python$version/site-packages and all its contents from unconfined_u:object_r:var_t:s0 to unconfined_u:object_r:httpd_sys_content_t:s0"
+	/sbin/restorecon -R venv/lib/python$version/site-packages
 	echo "Relabel server/* from unconfined_u:object_r:var_t:s0 to unconfined_u:object_r:httpd_sys_content_t:s0"
 	/sbin/restorecon -R server
 	echo "Relabel static/* from unconfined_u:object_r:var_t:s0 to unconfined_u:object_r:httpd_sys_content_t:s0"
