@@ -72,7 +72,7 @@ elif command -v apt >/dev/null; then
 	apt install -y python$minor_version
 
 	### Link python binary to latest version
-	#ln -vsf /usr/bin/python$minor_version /usr/bin/python
+	ln -vsf /usr/bin/python$minor_version /usr/bin/python
 
 	## Install venv - Python virtual environment manager
 	apt install -y python$major_version-venv
