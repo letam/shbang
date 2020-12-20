@@ -41,18 +41,18 @@ fi
 if command -v apt >/dev/null; then
 	version=$python_major_version
 	if ! command -v pip >/dev/null; then
-		printf "INFO: Installing Python pip..."
+		echo "INFO: Installing Python pip..."
 		sudo apt install -y "python$version-pip" \
 			2>&1 | tee -a "/var/log/setup/install/python$version-pip" >/dev/null
 		sudo ln -vs "/usr/bin/pip$version" /usr/bin/pip
 	fi
 	if ! dpkg -l | grep -q "python$version-venv"; then
-		printf "INFO: Installing Python venv..."
+		echo "INFO: Installing Python venv..."
 		sudo apt install -y "python$version-venv" \
 			2>&1 | tee -a "/var/log/setup/install/python$version-venv" >/dev/null
 	fi
 	if [[ ! -f /usr/local/bin/python-venv ]]; then
-		printf "INFO: Creating shortcut for python-venv..."
+		echo "INFO: Creating shortcut for python-venv..."
 		sudo echo -e '#!/usr/bin/env bash\n\npython'$version' -m venv "$@"' \
 			| sudo tee /usr/local/bin/python-venv >/dev/null
 		sudo chmod +x /usr/local/bin/python-venv
