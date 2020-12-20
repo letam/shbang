@@ -51,8 +51,7 @@ if [[ $now = "" ]]; then
 		"
 else
 	command+="
-		echo \"INFO [\$(date)]: Executing /opt/orc/$script_path ...\" \
-		echo \"Executing script that was scheduled at: \$(date)\" \
+		echo \"INFO [\$(date)]: Executing script /opt/orc/$script_path ...\" \
 		&& echo \"__START__: \$(date)\" | sudo tee -a $log \
 		&& sudo /opt/orc/$script_path 2>&1 | sudo tee -a $log \
 		&& echo \"__END__: \$(date)\" | sudo tee -a $log
