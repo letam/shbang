@@ -32,7 +32,7 @@ fi
 # Main
 
 # Create $user
-if [[ $(uname -a) =~ "Ubuntu" ]]; then
+if [[ $(head -1 /etc/os-release) = 'NAME="Ubuntu"' ]]; then
 	sudo adduser --disabled-password --shell /bin/bash --gecos "$user User" $user
 else
 	sudo adduser $user

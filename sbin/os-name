@@ -8,7 +8,7 @@ is_centos() {
 }
 
 is_ubuntu() {
-	[[ $(uname -s) = "Linux" && $(uname -a) =~ "Ubuntu" ]]
+	[[ $(head -1 /etc/os-release) = 'NAME="Ubuntu"' ]]
 }
 
 is_mac() {

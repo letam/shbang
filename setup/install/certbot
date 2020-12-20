@@ -10,7 +10,7 @@ is_centos() {
 	[[ -f /etc/centos-release ]]
 }
 is_ubuntu() {
-	[[ $(uname -a) =~ Ubuntu ]]
+	[[ $(head -1 /etc/os-release) = 'NAME="Ubuntu"' ]]
 }
 
 
