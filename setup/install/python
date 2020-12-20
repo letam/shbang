@@ -51,16 +51,6 @@ if command -v dnf >/dev/null; then
 	ln -vs /usr/local/bin/python$file_version /usr/bin/python
 	ln -vs /usr/local/bin/python$file_version /usr/bin/python$major_version
 
-	### Create shortcut to system Python venv
-	if [[ ! -f /usr/bin/python-venv ]]; then
-		cat > /usr/bin/python-venv <<-EOF
-			#!/usr/bin/env bash
-
-			python$major_version -m venv "\$@"
-		EOF
-		chmod +x /usr/bin/python-venv
-	fi
-
 	### Link pip binary to latest version
 	if [[ -f /usr/local/bin/pip$file_version ]]; then
 		ln -vs /usr/local/bin/pip$file_version /usr/bin/pip
@@ -70,6 +60,9 @@ if command -v dnf >/dev/null; then
 	## Update libraries pip and setuptools to latest versions
 	echo "INFO: Update libraries pip and setuptools to latest versions..."
 	pip install -U pip setuptools
+
+	## Install virtualenv
+	pip install -U virtualenv
 
 elif command -v apt >/dev/null; then
 
@@ -85,25 +78,15 @@ elif command -v apt >/dev/null; then
 	### Link python binary to latest version
 	ln -vsf /usr/bin/python$minor_version /usr/bin/python
 
-	## Install venv - Python virtual environment manager
-	echo "INFO: Installing Python venv..."
-	apt install -y python$major_version-venv
-
-	### Create shortcut to system Python venv
-	if [[ ! -f /usr/local/bin/python-venv ]]; then
-		cat > /usr/local/bin/venv <<-EOF
-			#!/usr/bin/env bash
-
-			python$major_version -m venv "\$@"
-		EOF
-		chmod +x /usr/bin/python-venv
-	fi
-
 	## Install PIP Python package installer
 	echo "INFO: Installing Python pip..."
 	apt install -y python$major_version-pip
 
 	### Link pip binary to latest version
 	ln -vsf /usr/bin/pip$major_version /usr/local/bin/pip
+
+	## Install virtualenv - Python virtual environment manager
+	echo "INFO: Installing Python virtualenv..."
+	python -m pip install virtualenv
 fi
 
