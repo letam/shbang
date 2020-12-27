@@ -10,7 +10,8 @@ argc=$#
 (( argc < 2 || argc > 3 )) && usage
 
 website_name="$1" ; shift
-wp_dest="$1" ; shift
+app_dest="$1"; shift
+wp_dest="$app_dest"
 db_dest="$1" ; shift
 [[ $db_dest = "" ]] && db_dest=$wp_dest
 
