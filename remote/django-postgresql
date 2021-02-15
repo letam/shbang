@@ -46,12 +46,12 @@ fi
 if [[ $db_dest != $app_dest ]]; then
 	### Get private IP address values of app server and data server
 	app_host=$(ssh $app_dest "private-ip" | cut -f1 -d/)
-	if [[ $app_dest = "" ]]; then
+	if [[ $app_host = "" ]]; then
 		>&2 echo "Error: Cannot retrieve private IP of Django web app server."
 		exit 1
 	fi
 	db_host=$(ssh $db_dest "private-ip" | cut -f1 -d/)
-	if [[ $db_dest = "" ]]; then
+	if [[ $db_host = "" ]]; then
 		>&2 echo "Error: Cannot retrieve private IP of PostgreSQL data server."
 		exit 1
 	fi
