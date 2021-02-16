@@ -12,6 +12,7 @@ if [[ $domain = "" ]]; then
 	>&2 echo "Error: Argument for domain required."
 	exit 1
 fi
+is_not_subdomain="test $(echo $domain | tr -dc "." | wc -c) -eq 1"
 
 
 # Auxiliary functions
@@ -25,6 +26,16 @@ is_ubuntu() {
 has_selinux() {
 	command -v getenforce >/dev/null && [[ $(getenforce) = Enforcing ]]
 }
+
+
+# Preliminary checks
+
+## Check that domain can be pinged
+! ping -c1 "$domain" >/dev/null && exit 1
+if $is_not_subdomain; then
+	## TODO: Verify that IP addresses of root domain and www domain match
+	! ping -c1 "www.$domain" >/dev/null && exit 1
+fi
 
 
 # Dependencies
@@ -85,7 +96,6 @@ cat /etc/logrotate.d/nginx | sed -E " s|(/log/nginx/)(\*log)|\1$domain/\2|; " \
 
 ### Include www subdomain in config if domain is root
 server_names=$domain
-is_not_subdomain="test $(echo $domain | tr -dc "." | wc -c) -eq 1"
 if $is_not_subdomain; then
 	server_names+=" www.$domain"
 	sudo sed -i -E "s|(server_name[ \t]+)$domain|\1$server_names|" $nginx_conf
