@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+
+# Add web domain to Linode account
+
+usage() {
+	>&2 echo "Usage: $0 DOMAIN EMAIL"
+	exit 1
+}
+argc=$#
+(( argc != 2 )) && usage
+
+domain=$1 ; shift
+email=$1 ; shift
+
+linode-cli domains create --type master --domain $domain --soa_email $email
+
