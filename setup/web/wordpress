@@ -322,7 +322,11 @@ fi
 
 ## Allow wordpress to write to file system
 echo "Update wp-config to allow Wordpress to write to filesystem to install plugins"
-echo -e "\n\n/** Allow Wordpress app to write to filesystem, to install plugins **/\ndefine('FS_METHOD', 'direct');\n" >> $html_dir/wp-config.php
+cat >> "$html_dir/wp-config.php" <<-EOT
+
+	/** Allow Wordpress app to write to filesystem, to install plugins **/
+	define('FS_METHOD', 'direct');
+	EOT
 
 
 ## Set SELinux permissions for wordpress to write to wp-content folder and descendants
