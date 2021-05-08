@@ -27,5 +27,10 @@ done <<< \
 
 domain_id="${domain_to_id[$domain]}"
 
+if [[ $domain_id = "" ]]; then
+	>&2 echo "Domain ID not found. It might be on another page."
+	exit 1
+fi
+
 linode-cli domains records-create $domain_id --type A --name "" --target $ip_address
 
