@@ -65,6 +65,9 @@ fi
 sql_friendly_name=$(echo $website_name | tr "." "_")
 db_name="$sql_friendly_name"
 db_user="$db_name"
+
+
+## BEGIN DB SETUP {
 db_password="$(randpw)"
 
 ### Return escaped value if it contains special character '$'
@@ -131,6 +134,8 @@ if [[ $db_host != $app_host ]]; then
 	ssh $db_dest "sudo firewall-add-rule $psql_port $app_host"
 	$(dirname $0)/psql-ssl-certificates $website_name $db_dest $app_dest
 fi
+
+## } END DB SETUP
 
 
 ## Confirm that we can query PostgreSQL database server from app server
