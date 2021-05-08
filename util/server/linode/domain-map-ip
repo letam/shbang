@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+
+# Map web domain to IP address
+
+usage() {
+	>&2 echo "Usage: $0 DOMAIN IP_ADDRESS"
+	exit 1
+}
+argc=$#
+(( argc != 2 )) && usage
+
+domain=$1 ; shift
+ip_address=$1 ; shift
+
+
+## BEGIN Create map of domains to ids {
+declare -A domain_to_id
+
+while read x; do
+	_domain=`echo $x | cut -d',' -f1`
+	_id=`echo $x | cut -d',' -f2`
+	domain_to_id[$_domain]=$_id
+done <<< \
+	`linode-cli domains list --text	| tail -n +2 | awk -v OFS="," '{print $2, $1}'`
+## } END Create map of domains to ids
+
+
+domain_id="${domain_to_id[$domain]}"
+
+linode-cli domains records-create $domain_id --type A --name "" --target $ip_address
+
