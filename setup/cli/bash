@@ -55,7 +55,7 @@ mkdir -vp ~/.config/bash/plugins
 		if [[ $line_num != "" ]]; then
 			sed -i "$line_num,$((line_num+3)) {s/^/#/}" $file
 		fi
-		##### Add alias for 'git stash push'
+		##### Insert alias for 'git stash push' above alias `gstaa`
 		if ! grep -q '^alias gsta=' $file; then
 			sed -i -E "s/^(alias gstaa=)/alias gsta='git stash push'\n\1/" $file
 		fi
