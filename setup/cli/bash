@@ -53,22 +53,39 @@ mkdir -vp ~/.config/bash/plugins
 		#### Disable 'autoload is-at-least' statement
 		sed -i -E "s/^(autoload .* is-at-least)/#\1/" $file
 
-		#### Disable 'is-at-least' statements
+		#### Disable 'is-at-least' statements and enable first case
 		line_num=$(grep -n -m1 "^is-at-least .*" $file | cut -f1 -d:)
 		while [[ $line_num != "" ]]; do
-			##### Include previous line in comment action
-			line_num=$((line_num - 1))
-			sed -i "$line_num,$((line_num+3)) {s/^/#/}" $file
+			additional_lines_to_comment=2
+
+			##### Store statement to enable (which should be the next line)
+			statement_to_enable=$(
+				sed "$((line_num + 1))"'q;d' $file \
+				| sed -E "s/\s*&&\s+(alias .*+') \\\/\1/" \
+			)
+			##### Insert statement enabled
+			sed -i "$((line_num+additional_lines_to_comment+1))i$statement_to_enable" $file
+
+			##### Check if should include previous line in comment action
+			previous_line="$(sed "$((line_num - 1))"'q;d' $file)"
+			if [[ ${previous_line:0:2} == '# ' ]]; then
+				line_num=$((line_num - 1))
+				let additional_lines_to_comment++
+			fi
+			sed -i "$line_num,$((line_num+additional_lines_to_comment)) {s/^/#/}" $file
+
+			##### Check for next occurence to run loop
 			line_num=$(grep -n -m1 "^is-at-least .*" $file | cut -f1 -d:)
 		done
-		##### Insert alias for 'git stash push' above alias `gstaa`
-		if ! grep -q '^alias gsta=' $file; then
-			sed -i -E "s/^(alias gstaa=)/alias gsta='git stash push'\n\1/" $file
-		fi
-		##### Insert alias for 'git fetch -all --prune' above alias `gfo`
-		if ! grep -q '^alias gfa=' $file; then
-			sed -i -E "s/^(alias gfo=)/alias gfa='git fetch --all --prune --jobs=10'\n\1/" $file
-		fi
+
+		# ##### Insert alias for 'git stash push' above alias `gstaa`
+		# if ! grep -q '^alias gsta=' $file; then
+		# 	sed -i -E "s/^(alias gstaa=)/alias gsta='git stash push'\n\1/" $file
+		# fi
+		# ##### Insert alias for 'git fetch -all --prune' above alias `gfo`
+		# if ! grep -q '^alias gfa=' $file; then
+		# 	sed -i -E "s/^(alias gfo=)/alias gfa='git fetch --all --prune --jobs=10'\n\1/" $file
+		# fi
 	else
 		cd - >/dev/null
 		cp -vp $(dirname $0)/plugins/git.plugin.bash ~/.config/bash/plugins

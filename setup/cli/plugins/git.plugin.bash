@@ -261,8 +261,8 @@ alias gst='git status'
 #is-at-least 2.13 "$git_version" \
 #  && alias gsta='git stash push' \
 #  || alias gsta='git stash save'
-
 alias gsta='git stash push'
+
 alias gstaa='git stash apply'
 alias gstc='git stash clear'
 alias gstd='git stash drop'
