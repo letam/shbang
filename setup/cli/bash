@@ -50,14 +50,24 @@ mkdir -vp ~/.config/bash/plugins
 		#### Convert one-liner functions to be multi-line blocks
 		sed -i -E "s/^(function [^{]+\{)\s*([^}]+)\s(})/\1\n  \2\n\3/" $file
 
-		#### Disable 'autoload is-at-least' statement and subsequent block
-		line_num=$(grep -n -m1 "^autoload .* is-at-least" $file | cut -f1 -d:)
-		if [[ $line_num != "" ]]; then
+		#### Disable 'autoload is-at-least' statement
+		sed -i -E "s/^(autoload .* is-at-least)/#\1/" $file
+
+		#### Disable 'is-at-least' statements
+		line_num=$(grep -n -m1 "^is-at-least .*" $file | cut -f1 -d:)
+		while [[ $line_num != "" ]]; do
+			##### Include previous line in comment action
+			line_num=$((line_num - 1))
 			sed -i "$line_num,$((line_num+3)) {s/^/#/}" $file
-		fi
+			line_num=$(grep -n -m1 "^is-at-least .*" $file | cut -f1 -d:)
+		done
 		##### Insert alias for 'git stash push' above alias `gstaa`
 		if ! grep -q '^alias gsta=' $file; then
 			sed -i -E "s/^(alias gstaa=)/alias gsta='git stash push'\n\1/" $file
+		fi
+		##### Insert alias for 'git fetch -all --prune' above alias `gfo`
+		if ! grep -q '^alias gfa=' $file; then
+			sed -i -E "s/^(alias gfo=)/alias gfa='git fetch --all --prune --jobs=10'\n\1/" $file
 		fi
 	else
 		cd - >/dev/null
