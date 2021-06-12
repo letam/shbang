@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+
+# Map web domain to IP address
+
+usage() {
+	>&2 echo "Usage: $0 DOMAIN IP_ADDRESS SUBDOMAIN"
+	exit 1
+}
+argc=$#
+(( argc != 3 )) && usage
+
+domain=$1 ; shift
+ip_address=$1 ; shift
+subdomain=$1 ; shift
+
+
+## BEGIN Create map of domains to ids {
+declare -A domain_to_id
+
+while read x; do
+	_domain=`echo $x | cut -d',' -f1`
+	_id=`echo $x | cut -d',' -f2`
+	domain_to_id[$_domain]=$_id
+done <<< \
+	`linode-cli domains list --text	| tail -n +2 | awk -v OFS="," '{print $2, $1}'`
+## } END Create map of domains to ids
+
+
+domain_id="${domain_to_id[$domain]}"
+
+if [[ $domain_id = "" ]]; then
+	>&2 echo "Domain ID not found. It might be on another page."
+	exit 1
+fi
+
+# TODO: Check if subdomain already exists before adding it again
+
+linode-cli domains records-create $domain_id --type A --name "$subdomain" --target $ip_address
+
