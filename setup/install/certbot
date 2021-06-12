@@ -108,10 +108,37 @@ EOF
 }
 
 
+setup_nginx_reload_cron() {
+	if [[ ! -f /etc/cron.weekly/nginx-reload ]]; then
+		cat > /etc/cron.weekly/nginx-reload <<"EOF"
+#!/bin/sh
+#
+# Reload Nginx to load new certbot certificates
+# Place in /etc/cron.weekly/reload-nginx
+
+if ! nginx -t; then
+	datetime=$(date -u +%Y-%m-%d-%H%M%S)
+	echo [ERROR: $datetime] >> /var/log/stats/nginx-reload
+
+	nginx -t 2>> /var/log/stats/nginx-reload
+
+	# TODO: Alert admin
+
+	exit 1
+fi
+
+service nginx reload
+EOF
+		sudo chmod +x /etc/cron.weekly/nginx-reload
+	fi
+}
+
+
 main() {
 	install_certbot
 	get_options_ssl_nginx
 	get_ssl_dhparams
+	setup_nginx_reload_cron
 }
 
 main
