@@ -1,10 +1,10 @@
 
-ubuntu_release=focal  # 20.04 LTS
+ubuntu_release=jammy  # 22.04 LTS
 centos_version=8
 
-python_version=3.9.1
+python_version=3.11.0
 
-php_version=8.0
+php_version=8.1
 
 mysql_version=8.0
 
