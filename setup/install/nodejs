@@ -6,22 +6,18 @@
 [[ $(id -u) != 0 ]] && echo "Error: Must be run as sudo/root." && exit 1
 
 
-node_version=16
+node_version=lts
 
 
 if [[ $(command -v dnf) != "" ]]; then
 	# Update system to source Node-related packages from nodesource.com
-	curl -sL https://rpm.nodesource.com/setup_$node_version.x | sudo bash -
+	curl -fsSL https://rpm.nodesource.com/setup_$node_version.x | sudo bash -
 
 	# Install Node binary
 	sudo dnf install -y nodejs
 
 	# Install build tools to compile and install native addons from npm
 	sudo dnf install -y gcc-c++ make
-
-	# Install Yarn package manager
-	curl -sL https://dl.yarnpkg.com/rpm/yarn.repo | sudo tee /etc/yum.repos.d/yarn.repo
-	sudo dnf install -y yarn
 
 elif [[ $(command -v apt) != "" ]]; then
 	# Update system to source Node-related packages from nodesource.com
@@ -36,11 +32,5 @@ elif [[ $(command -v apt) != "" ]]; then
 		# Install build tools to compile and install native addons from npm
 		sudo apt-get install -y build-essential
 	fi
-
-	# Install Yarn package manager
-	curl -sS https://dl.yarnpkg.com/debian/pubkey.gpg | sudo apt-key add -
-	echo "deb https://dl.yarnpkg.com/debian/ stable main" | sudo tee /etc/apt/sources.list.d/yarn.list
-	sudo apt-get update && sudo apt-get install -y yarn
-	sudo apt-get install -y yarn
 
 fi
