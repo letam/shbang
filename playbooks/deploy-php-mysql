@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+
+# Deploy a PHP web app connected to MySQL database server
+
+usage() {
+	>&2 echo "Usage: $0 DEST DBHOST"
+	exit 1
+}
+argc=$#
+(( argc != 2 )) && usage
+
+
+# Set variables
+
+dest=$1 ; shift
+db_dest=$1 ; shift
+
+[[ ! $dest =~ @ ]] \
+	&& >&2 echo "Invalid destination. Expected format: \$user@\$host" && exit 1
+
+domain=$(cut -f2 -d@ <<< $dest)
+user=$(cut -f1 -d@ <<< $dest)
+
+db_domain=$(cut -f2 -d@ <<< $db_dest)
+db_user=$(cut -f1 -d@ <<< $db_dest)
+
+
+# Main
+
+./remote/php-mysql $domain $user@$domain $db_user@$db_domain
+
