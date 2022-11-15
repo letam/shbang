@@ -97,12 +97,12 @@ bak "$nginx_conf"
 {
 	tab=$(grep -m1 -E "^\s+.*" "$nginx_conf" | sed -E "s|^([ \t]+).*|\1|")
 
-	## Set location blocks for php pages and wp-admin
+	## Set location blocks for php pages
 	#perl -i -pe "BEGIN{undef $/;}
 	perl -i -p0e "
 		s|^(\s+location / \{)[^\}]*\}\n\
 |\1
-${tab}${tab}try_files $uri $uri/ =404;
+${tab}${tab}try_files \\\$uri \\\$uri/ /index.php\\\$is_args\\\$args;
 ${tab}}
 |m" "$nginx_conf"
 
