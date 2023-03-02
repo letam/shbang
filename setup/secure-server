@@ -18,7 +18,7 @@ backup_file() { cp -p "$1" "$1.bak.$(date -u +%Y-%m-%d-%H%M%S)"; }
 has_dnf() { command -v dnf >/dev/null; }
 has_apt() { command -v apt >/dev/null; }
 is_centos() { [[ -f /etc/centos-release ]]; }
-is_ubuntu() { [[ $(head -1 /etc/os-release) = 'NAME="Ubuntu"' ]]; }
+is_ubuntu() { cat /etc/os-release | grep -q "NAME=\"Ubuntu\""; }
 
 
 # Args

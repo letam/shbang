@@ -10,7 +10,7 @@ is_centos() {
 	[[ -f /etc/centos-release ]]
 }
 is_ubuntu() {
-	[[ $(head -1 /etc/os-release) = 'NAME="Ubuntu"' ]]
+	cat /etc/os-release | grep -q "NAME=\"Ubuntu\""
 }
 
 
