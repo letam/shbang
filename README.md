@@ -8,7 +8,7 @@ via scripts of Bash shell and Linux commands, but is ultimately a polyglot frame
 
 Open to using any code within reach, whether Perl, Python, PHP, Go, Deno, etc.
 
-So far, Shbang is tested/guaranteeed to work on **CentOS 8** and **Ubuntu 20.04**
+So far, Shbang is tested/guaranteeed to work on **Ubuntu 22.04**. (and partially on **CentOS 8**)
 
 This project strives to be an ever-improving reference of best-practices
 for scripting with Bash and Unix-based tools.
@@ -36,7 +36,7 @@ Contributions welcome.
 ## Requirements
 
 - A machine with SSH, Bash 4.4+ or ZSH, sed, grep
-- SSH access to server or VM running either CentOS 8 or Ubuntu 20.04 LTS
+- SSH access to server or VM running Ubuntu LTS
 
 ## Instructions
 
