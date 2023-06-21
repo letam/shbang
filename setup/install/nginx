@@ -132,6 +132,7 @@ if grep -q "^\sgzip[ _]" /etc/nginx/nginx.conf; then
 	sed -i -E "s/^([ \t\]+gzip.*;)/#\1/" /etc/nginx/nginx.conf
 fi
 
+
 ## Set max size of request from client
 if [[ ! -f /etc/nginx/conf.d/client.conf ]] || \
 	! grep -q client_max_body_size /etc/nginx/conf.d/client.conf
@@ -141,10 +142,6 @@ then
 	client_max_body_size 5M;
 	EOF
 fi
-
-
-## Set up log file rotation
-# TODO
 
 
 ## Set Nginx config to process configs in the same way across different platforms
@@ -157,86 +154,87 @@ fi
 
 
 ### Extract and copy default server config blocks into its own file (on CentOS/RHEL)
+(
+	src_file=/etc/nginx/nginx.conf
+	dst_file=/etc/nginx/conf.d/default.conf
 
-src_file=/etc/nginx/nginx.conf
-dst_file=/etc/nginx/conf.d/default.conf
+	if grep -q -E "^[ \t]*server {" $src_file \
+		&& grep -q -E "^[ \t]+listen .*default_server;" $src_file
+	then
 
-if grep -q -E "^[ \t]*server {" $src_file \
-   && grep -q -E "^[ \t]+listen .*default_server;" $src_file
-then
+		block_end_symbol="}"
 
-   block_end_symbol="}"
+		# Get each starting block (one for http, the other for https)
 
-   # Get each starting block (one for http, the other for https)
+		## Set word boundaries as we process file contents
+		IFS_0="$IFS"
+		IFS=""
 
-   ## Set word boundaries as we process file contents
-   IFS_0="$IFS"
-   IFS=""
+		block_start_line_nums=$(grep -n -E "^[ \t\#]*server {" $src_file | cut -f1 -d:)
+		while read block_start_line_num; do
+			### Ignore content in file before the first line of the block
+			content_crop_at_line_num=$(tail -n +$block_start_line_num $src_file)
 
-   block_start_line_nums=$(grep -n -E "^[ \t\#]*server {" $src_file | cut -f1 -d:)
-   while read block_start_line_num; do
-       ### Ignore content in file before the first line of the block
-       content_crop_at_line_num=$(tail -n +$block_start_line_num $src_file)
+			### Get opening line indent in order to find end of block and num of lines
+			line_indent=$(echo $content_crop_at_line_num | head -1 | sed -E "s|^([ \t\#]*).*$|\1|")
+			block_num_of_lines=$(echo $content_crop_at_line_num \
+				| grep -n -E "^$line_indent$block_end_symbol" \
+				| cut -f1 -d:)
 
-       ### Get opening line indent in order to find end of block and num of lines
-       line_indent=$(echo $content_crop_at_line_num | head -1 | sed -E "s|^([ \t\#]*).*$|\1|")
-       block_num_of_lines=$(echo $content_crop_at_line_num \
-           | grep -n -E "^$line_indent$block_end_symbol" \
-           | cut -f1 -d:)
+			### Get content block to write to new file
+			content_block=$(echo $content_crop_at_line_num | head -n $block_num_of_lines)
+			echo -e "\n\n$content_block" | sudo tee -a $dst_file >/dev/null
+		done <<< $(echo $block_start_line_nums)
 
-       ### Get content block to write to new file
-       content_block=$(echo $content_crop_at_line_num | head -n $block_num_of_lines)
-       echo -e "\n\n$content_block" | sudo tee -a $dst_file >/dev/null
-   done <<< $(echo $block_start_line_nums)
-
-   ## Reset word boundaries
-   IFS="$IFS_0"
-
-
-   # Format/clean new file
-
-   ## De-indent the lines
-   indent_string=$(cat $dst_file \
-       | grep -E "^[ \t]+" | head -1 | sed -E "s|(^[ \t]+).*$|\1|")
-   sudo sed -i -E "s|^(#?)$indent_string(.*)|\1\2|" $dst_file
-
-   ## Trim leading blank lines of file
-   lines_to_trim=0
-   while read line; do
-       if [[ $line != "" ]]; then
-           break
-       fi
-       ((++lines_to_trim))
-   done <<< $(cat $dst_file)
-   sudo sed -i "1,${lines_to_trim}d" $dst_file
+		## Reset word boundaries
+		IFS="$IFS_0"
 
 
-   # Disable each active server block in /etc/nginx/nginx.conf
+		# Format/clean new file
 
-   ## Set word boundaries as we process file contents
-   IFS_0="$IFS"
-   IFS=""
+		## De-indent the lines
+		indent_string=$(cat $dst_file \
+			| grep -E "^[ \t]+" | head -1 | sed -E "s|(^[ \t]+).*$|\1|")
+		sudo sed -i -E "s|^(#?)$indent_string(.*)|\1\2|" $dst_file
 
-   active_block_start_line_nums=$(grep -n -E "^[ \t]*server {" $src_file | cut -f1 -d:)
-   while read line_num; do
-       ### Ignore content in file before the first line of the block
-       content_crop_at_line_num=$(tail -n +$line_num $src_file)
+		## Trim leading blank lines of file
+		lines_to_trim=0
+		while read line; do
+			if [[ $line != "" ]]; then
+				break
+			fi
+			((++lines_to_trim))
+		done <<< $(cat $dst_file)
+		sudo sed -i "1,${lines_to_trim}d" $dst_file
 
-       ### Get opening line indent in order to find ending line number
-       line_indent=$(echo $content_crop_at_line_num | head -1 | sed -E "s|^([ \t\#]*).*$|\1|")
-       block_num_of_lines=$(echo $content_crop_at_line_num \
-           | grep -n -E "^$line_indent$block_end_symbol" \
-           | cut -f1 -d:)
-       line_num_end=$((line_num + block_num_of_lines - 1))
 
-       ### Comment lines to disable
-       sudo sed -i -E "$line_num,$line_num_end s/(.*)/#\1/" $src_file
-   done <<< $(echo $active_block_start_line_nums)
+		# Disable each active server block in /etc/nginx/nginx.conf
 
-   ## Reset word boundaries
-   IFS="$IFS_0"
+		## Set word boundaries as we process file contents
+		IFS_0="$IFS"
+		IFS=""
 
-fi
+		active_block_start_line_nums=$(grep -n -E "^[ \t]*server {" $src_file | cut -f1 -d:)
+		while read line_num; do
+			### Ignore content in file before the first line of the block
+			content_crop_at_line_num=$(tail -n +$line_num $src_file)
+
+			### Get opening line indent in order to find ending line number
+			line_indent=$(echo $content_crop_at_line_num | head -1 | sed -E "s|^([ \t\#]*).*$|\1|")
+			block_num_of_lines=$(echo $content_crop_at_line_num \
+				| grep -n -E "^$line_indent$block_end_symbol" \
+				| cut -f1 -d:)
+			line_num_end=$((line_num + block_num_of_lines - 1))
+
+			### Comment lines to disable
+			 sudo sed -i -E "$line_num,$line_num_end s/(.*)/#\1/" $src_file
+		done <<< $(echo $active_block_start_line_nums)
+
+		## Reset word boundaries
+		IFS="$IFS_0"
+
+	fi
+)
 
 
 ### Update default server config
@@ -253,9 +251,11 @@ fi
 		sed -i -E "s|^(\s*server_name .*)|\1\n    $root_dir|" $file
 	fi
 
-	### Load configuration files in default.d/*.conf
-	if ! grep -q '^    include /etc/nginx/default.d/\*.conf;' $file; then
-		sed -i -E "s|^(    $root_dir)|\1\n\n    # Load configuration files for the default server block.\n    include /etc/nginx/default.d/*.conf;|" $file
+	### Load configuration files in default.d/*.conf if directory exists
+	if [[ -d /etc/nginx/default.d ]]; then
+		if ! grep -q '^    include /etc/nginx/default.d/\*.conf;' $file; then
+			sed -i -E "s|^(    $root_dir)|\1\n\n    # Load configuration files for the default server block.\n    include /etc/nginx/default.d/*.conf;|" $file
+		fi
 	fi
 
 	[[ $(diff $file $backup) = "" ]] && sudo rm $backup
