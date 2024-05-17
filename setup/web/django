@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Set up Django web server with SQLite database and serve with Gunicorn and Nginx
+# Set up Django web server with SQLite/PostgreSQL database and serve with Gunicorn and Nginx
 
 
 [[ $(id -u) != 0 ]] && echo "Error: Must be run as sudo/root." && exit 1
@@ -83,14 +83,6 @@ if ! command -v perl >/dev/null; then
 	echo " DONE! [$(date)]"
 fi
 
-## Install PostgreSQL client if not found
-if ! command -v psql >/dev/null; then
-	printf "INFO: Installing PostgreSQL client..."
-	sudo $(dirname $0)/../install/postgresql-client \
-		2>&1 | tee /var/log/setup/install/postgresql-client >/dev/null
-	echo " DONE! [$(date)]"
-fi
-
 
 if has_selinux; then
 	## Load SELinux policy settings
@@ -160,6 +152,14 @@ psql_credentials_file=/home/$SUDO_USER/.credentials/psql/$sql_friendly_name
 if [[ -f $psql_credentials_file ]]; then
 	echo "Credentials found for PostgreSQL database server connection found."
 	echo "Proceeding to set up PostgreSQL connection..."
+
+	## Install PostgreSQL client if not found
+	if ! command -v psql >/dev/null; then
+		printf "INFO: Installing PostgreSQL client..."
+		sudo $(dirname $0)/../install/postgresql-client \
+			2>&1 | tee /var/log/setup/install/postgresql-client >/dev/null
+		echo " DONE! [$(date)]"
+	fi
 
 	### Install Development files for building PostgreSQL client tools
 	if command -v dnf >/dev/null; then
