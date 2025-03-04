@@ -108,14 +108,13 @@ cd $project_dir
 python-venv venv
 source venv/bin/activate
 pip install --upgrade pip setuptools
-pip install Django dj-database-url gunicorn meinheld
+pip install Django dj-database-url gunicorn
 
 ## Create requirements.txt file
 pip list | grep -E "(\
 Django |\
 dj-database-url |\
-gunicorn |\
-meinheld \
+gunicorn \
 )" | tr -s " " | sed "s/ /==/" > requirements.txt
 
 ## Create Django project

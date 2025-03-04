@@ -298,12 +298,6 @@ add_policy_files_generated_from_audit2allow() {
 	EOF
 
 
-	echo "Set SE bool to address: SELinux is preventing gunicorn from map access on the file /var/www/$domain/venv/lib/python$python_version/site-packages/meinheld/server.cpython-$(tr -d "." <<< $python_version)-x86_64-linux-gnu.so"
-	#* If you want to allow any process to mmap any file on system with attribute file_type.
-	#* (Needed for Meinheld server)
-	sudo setsebool -P domain_can_mmap_files 1
-
-
 	sql_friendly_name=$(tr "." "_" <<< $domain)
 	echo "Add policy for: SELinux is preventing /usr/local/bin/python$python_version from read access on the file $sql_friendly_name"
 	#* type=AVC msg=audit(1585973033.141:43569): avc:  denied  { read } for  pid=26829 comm="gunicorn" name="te1_blar_app" dev="vda1" ino=41996283 scontext=system_u:system_r:init_t:s0 tcontext=unconfined_u:object_r:user_home_t:s0 tclass=file permissive=0
