@@ -8,7 +8,7 @@ via scripts of Bash shell and Linux commands, but is ultimately a polyglot frame
 
 Open to using any code within reach, whether Perl, Python, PHP, Go, Deno, etc.
 
-So far, Shbang is tested/guaranteeed to work on **Ubuntu 22.04**. (and partially on **CentOS 8**)
+Supports **Ubuntu 24.04 LTS+**. (and partially on **CentOS 8**)
 
 This project strives to be an ever-improving reference of best-practices
 for scripting with Bash and Unix-based tools.

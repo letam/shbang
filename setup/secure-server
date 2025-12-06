@@ -119,14 +119,16 @@ if [[ "root" != "$user" || "" != "$new_user" ]]; then
 		sudo bak /etc/ssh/sshd_config
 		#sudo sed --in-place -E "s/(^PermitRootLogin) yes/\1 prohibit-password/" $file
 		sudo sed --in-place -E "s/(^PermitRootLogin) yes/\1 no/" $file
-		sudo systemctl reload sshd
+		sudo systemctl daemon-reload
+		sudo systemctl restart ssh.socket
 	fi
 	if ! grep -q -E "^PermitRootLogin no" /etc/ssh/sshd_config; then
 		echo "INFO: Updating /etc/ssh/sshd_config: -> PermitRootLogin no"
 		file=/etc/ssh/sshd_config
 		sudo bak /etc/ssh/sshd_config
 		echo "PermitRootLogin no" >> /etc/ssh/sshd_config
-		sudo systemctl reload sshd
+		sudo systemctl daemon-reload
+		sudo systemctl restart ssh.socket
 	fi
 fi
 
