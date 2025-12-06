@@ -36,7 +36,7 @@ Contributions welcome.
 ## Requirements
 
 - A machine with SSH, Bash 4.4+ or ZSH, sed, grep
-- SSH access to server or VM running Ubuntu LTS
+- SSH access to server or VM running Ubuntu LTS (for remote setup), or run locally with `--local`
 
 ## Instructions
 
@@ -80,6 +80,13 @@ If using hard-coded arguments directly in the command, then...
 	```
 	bash -c "./setup-server -h '$host' -n '$new_user' -k \"\$(cat ~/tmp/authorized_keys)\""
 	```
+
+### Local Setup
+
+To run the setup script directly on the local machine (without SSH):
+```
+authorized_keys=$(cat ~/.ssh/authorized_keys); new_user=bob; ./setup-server --local -k "$authorized_keys" -n "$new_user"
+```
 
 ## Testing
 

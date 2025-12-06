@@ -15,12 +15,13 @@ while [[ $# -gt 0 ]]; do
 		-p|--port) port="$2"; shift; shift;;
 		-n|--new_user) new_user="$2"; shift; shift;;
 		--update) should_update=y; shift;;
+		--local) run_local=y; shift;;
 		-*|*) echo "Unknown option: $1" >&2; exit 1;;
 	esac
 done
 
-if [[ "" = "$host" ]]; then
-	>&2 echo "Error: Argument for host required."
+if [[ "" = "$host" && "" = "$run_local" ]]; then
+	>&2 echo "Error: Argument for host required (or use --local for local execution)."
 	exit 1
 fi
 
@@ -42,10 +43,10 @@ fi
 
 # Main
 
-## Construct command to send via SSH, to be run immediately on a bash-compatible shell
+## Construct command to be run on a bash-compatible shell
 
 command="
-echo \"INFO [\$(date)]: Begin SSH command.\"
+echo \"INFO [\$(date)]: Begin server setup.\"
 "
 
 ### Command arguments
@@ -188,12 +189,14 @@ fi
 
 ### End command
 command+="
-echo \"INFO [\$(date)]: End SSH command.\"
+echo \"INFO [\$(date)]: Server setup complete.\"
 "
 
-## Execute command on target server
+## Execute command on target server (or locally)
 
-if [[ "" != "$ssh_key" ]]; then
+if [[ "$run_local" = "y" ]]; then
+	bash -c "$command"
+elif [[ "" != "$ssh_key" ]]; then
 	ssh -i "$ssh_key" -p "$port" "$user@$host" "$command"
 else
 	ssh -p "$port" "$user@$host" "$command"
