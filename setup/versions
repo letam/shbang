@@ -2,7 +2,7 @@
 ubuntu_release=noble  # 24.04 LTS
 centos_version=8
 
-python_version=3.13.0
+python_version=3.14.2
 
 php_version=8.4
 
