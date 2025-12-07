@@ -93,6 +93,13 @@ if [[ ! -f $php_fpm_www_conf ]]; then
 fi
 
 
+# Install Nginx if not found (required for nginx configuration steps below)
+if ! command -v nginx >/dev/null; then
+	echo "INFO: Installing Nginx..."
+	"$(dirname "$0")/nginx"
+fi
+
+
 # Ensure existence of PHP socket configuration for Nginx server blocks
 echo "Creating /etc/nginx/conf.d/php-fpm.conf..."
 [[ ! -d /etc/nginx/conf.d ]] && mkdir -vp /etc/nginx/conf.d
