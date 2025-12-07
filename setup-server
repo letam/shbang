@@ -166,6 +166,19 @@ if [[ 'root' != \"\$user\" || '' != \"\$new_user\" ]]; then
 fi
 "
 
+### If adding a new user without authorized keys, copy from root's authorized keys
+command+="
+if [[ '' != \"\$new_user\" && '' = \"\$authorized_keys\" ]]; then
+	echo 'INFO: No authorized keys provided for new user; copying from root.'
+	if [[ -f /root/.ssh/authorized_keys && -s /root/.ssh/authorized_keys ]]; then
+		authorized_keys=\"\$(cat /root/.ssh/authorized_keys)\"
+	else
+		echo 'ERROR: Root has no authorized keys. Cannot create new user without SSH keys.' >&2
+		exit 1
+	fi
+fi
+"
+
 ### Commence server-side script execution
 command+="
 sudo bash /usr/local/setup/secure-server \

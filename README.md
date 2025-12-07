@@ -49,6 +49,8 @@ Contributions welcome.
 	host=localhost
 
 	# Specify value of SSH authorized_keys to transfer (optional; default='')
+	# Note: If not provided when creating a new user, root's authorized_keys
+	# will be copied. If root has no keys, the script will abort.
 	authorized_keys=$(cat ~/tmp/authorized_keys)
 
 	# Specify SSH Port (optional; default: 22)
